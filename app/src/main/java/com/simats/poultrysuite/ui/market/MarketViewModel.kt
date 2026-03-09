@@ -21,6 +21,9 @@ class MarketViewModel @Inject constructor(
     private val _marketState = MutableStateFlow<MarketState>(MarketState.Loading)
     val marketState = _marketState.asStateFlow()
     
+    private val _ordersState = MutableStateFlow<OrdersState>(OrdersState.Loading)
+    val ordersState = _ordersState.asStateFlow()
+    
     // Simple way to expose role
     private val _userRole = MutableStateFlow<String?>(null)
     val userRole = _userRole.asStateFlow()
@@ -46,10 +49,21 @@ class MarketViewModel @Inject constructor(
         }
     }
 
-    fun createListing(type: String, quantity: String, price: String) {
+    fun loadMyOrders() {
         viewModelScope.launch {
             try {
-                // Optimistic update or just reload
+                _ordersState.value = OrdersState.Loading
+                val orders = api.getMyOrders()
+                _ordersState.value = OrdersState.Success(orders)
+            } catch (e: Exception) {
+                _ordersState.value = OrdersState.Error(e.message ?: "Failed to load orders")
+            }
+        }
+    }
+
+    fun createListing(type: String, quantity: String, price: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
                 val request = mapOf(
                     "type" to type,
                     "quantity" to quantity,
@@ -57,20 +71,22 @@ class MarketViewModel @Inject constructor(
                 )
                 api.createListing(request)
                 loadListings() // Refresh
+                onSuccess()
             } catch (e: Exception) {
-                // Handle error
+                onError(e.message ?: "Failed to create listing")
             }
         }
     }
     
-    fun placeOrder(productId: String) {
+    fun placeOrder(productId: String, onSuccess: () -> Unit) {
         viewModelScope.launch {
             try {
                 val request = mapOf("productId" to productId)
                 api.placeOrder(request)
                 loadListings() // Refresh to remove sold item
+                onSuccess()
             } catch (e: Exception) {
-                // Handle error
+                // Navigate or notify failure
             }
         }
     }
@@ -80,4 +96,10 @@ sealed class MarketState {
     object Loading : MarketState()
     data class Success(val listings: List<ProductRequest>) : MarketState()
     data class Error(val message: String) : MarketState()
+}
+
+sealed class OrdersState {
+    object Loading : OrdersState()
+    data class Success(val orders: List<com.simats.poultrysuite.data.model.Order>) : OrdersState()
+    data class Error(val message: String) : OrdersState()
 }

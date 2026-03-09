@@ -10,23 +10,41 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import javax.inject.Singleton
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    // For Emulator: 10.0.2.2
-    // For Physical Device: Use PC's IP address
+    // For Emulator/USB Proxy via `adb reverse`: localhost
+    // For Physical Device over Wi-Fi: Use PC's IP address
     private const val BASE_URL = "http://10.236.124.151:3000/"
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient {
-        val logging = HttpLoggingInterceptor().apply {
+    fun provideOkHttpClient(sessionManager: com.simats.poultrysuite.data.local.SessionManager): OkHttpClient {
+        val logging = HttpLoggingInterceptor { message ->
+            android.util.Log.d("POULTRY_API_LOG", message)
+        }.apply {
             level = HttpLoggingInterceptor.Level.BODY
+        }
+        val authInterceptor = okhttp3.Interceptor { chain ->
+            val token = runBlocking {
+                sessionManager.authToken.first()
+            }
+            val request = if (token != null) {
+                chain.request().newBuilder()
+                    .addHeader("Authorization", "Bearer $token")
+                    .build()
+            } else {
+                chain.request()
+            }
+            chain.proceed(request)
         }
         return OkHttpClient.Builder()
             .addInterceptor(logging)
+            .addInterceptor(authInterceptor)
             .build()
     }
 

@@ -71,22 +71,26 @@ app.post('/auth/register', async (req, res) => {
                 email,
                 password: hashedPassword,
                 role: role || 'FARMER',
-                name,
-                phone
+                name: name || '',
+                phone: phone || ''
             },
         });
+
         // Create Farm if user is Farmer
         if (user.role === 'FARMER') {
             await prisma.farm.create({
                 data: {
-                    name: `${name}'s Farm`,
+                    name: `${name || 'New'}'s Farm`,
                     ownerId: user.id
                 }
             });
         }
-        res.json({ message: 'User created successfully', userId: user.id });
+
+        // Return a token immediately so the app can auto-login after registering
+        const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET);
+        res.json({ message: 'User created successfully', userId: user.id, token, role: user.role, name: user.name });
     } catch (error) {
-        res.status(400).json({ error: 'Email already exists or invalid data' });
+        res.status(400).json({ error: 'Email already exists or invalid data', details: error.message });
     }
 });
 
@@ -107,7 +111,73 @@ app.post('/auth/login', async (req, res) => {
     }
 });
 
+// Get current user details
+app.get('/auth/me', authenticateToken, async (req, res) => {
+    console.log(`[/auth/me] Fetching profile for userId: ${req.user.id}`);
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.id },
+            select: {
+                id: true,
+                email: true,
+                name: true,
+                phone: true,
+                role: true
+            }
+        });
+        if (!user) {
+            console.log(`[/auth/me] User not found in database for ID: ${req.user.id}`);
+            return res.status(401).json({ error: 'Session invalid: User not found' });
+        }
+        console.log(`[/auth/me] Profile found: ${user.email}`);
+        res.json(user);
+    } catch (error) {
+        console.error(`[/auth/me] Error:`, error.message);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Update current user profile
+app.put('/auth/profile', authenticateToken, async (req, res) => {
+    const { name, phone } = req.body;
+    console.log(`[/auth/profile] Updating profile for userId: ${req.user.id}`);
+    try {
+        const updatedUser = await prisma.user.update({
+            where: { id: req.user.id },
+            data: {
+                name: name,
+                phone: phone
+            },
+            select: {
+                id: true,
+                email: true,
+                name: true,
+                phone: true,
+                role: true
+            }
+        });
+        console.log(`[/auth/profile] Profile updated successfully for: ${updatedUser.email}`);
+        res.json(updatedUser);
+    } catch (error) {
+        console.error(`[/auth/profile] Error:`, error.message);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // --- FARMER ROUTES ---
+
+// Helper to get start and end of dates
+const startOfToday = new Date();
+startOfToday.setHours(0, 0, 0, 0);
+
+const startOfYesterday = new Date(startOfToday);
+startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+
+const startOfWeek = new Date(startOfToday);
+startOfWeek.setDate(startOfWeek.getDate() - 7);
+
+const startOfMonth = new Date(startOfToday);
+startOfMonth.setDate(startOfMonth.getDate() - 30);
 
 // Get Farm Dashboard Data
 app.get('/farm/dashboard', authenticateToken, async (req, res) => {
@@ -116,9 +186,179 @@ app.get('/farm/dashboard', authenticateToken, async (req, res) => {
     try {
         const farm = await prisma.farm.findUnique({
             where: { ownerId: req.user.id },
-            include: { batches: true, inventory: true }
+            include: {
+                batches: true,
+                inventory: true,
+                products: {
+                    include: { order: true }
+                }
+            }
         });
-        res.json(farm);
+
+        if (!farm) return res.status(404).json({ error: "Farm not found" });
+
+        // 1. Total Birds
+        const totalBirds = farm.batches.reduce((sum, b) => sum + b.count, 0);
+        const totalMortality = farm.batches.reduce((sum, b) => sum + b.mortality, 0);
+        // Birds Trend (inverse mortality impact over total)
+        const birdsTrend = totalBirds > 0 ? -((totalMortality / totalBirds) * 100) : 0;
+
+        // 2. Eggs Today (Based on active layers, assuming 85% yield for mature birds > 120 days)
+        const activeLayers = farm.batches.filter(b => b.type === 'LAYER' && b.ageDays > 120)
+            .reduce((sum, b) => sum + b.count, 0);
+        const eggsToday = Math.floor(activeLayers * 0.85); // 85% laying rate
+
+        // Eggs Trend (Based on whether new layers reached maturity this week)
+        const newlyMatureLayers = farm.batches.filter(b => b.type === 'LAYER' && b.ageDays >= 120 && b.ageDays < 127)
+            .reduce((sum, b) => sum + b.count, 0);
+        const eggsTrend = activeLayers > 0 ? (newlyMatureLayers / activeLayers) * 100 : 0;
+
+        // 3. Feed Remaining
+        const feedRemaining = farm.inventory ? farm.inventory.feedKg : 0;
+        // Feed Trend (Mock calculation based on average daily consumption: 0.12kg per bird)
+        const dailyFeedConsumption = totalBirds * 0.12;
+        const feedTrend = feedRemaining > 0 ? -((dailyFeedConsumption / feedRemaining) * 100) : 0;
+
+        // 4. Revenue (Using completed Orders)
+        const completedOrders = farm.products
+            .map(p => p.order)
+            .filter(o => o && o.status === 'COMPLETED');
+
+        const todayRevenue = completedOrders
+            .filter(o => new Date(o.createdAt) >= startOfToday)
+            .reduce((sum, o) => sum + o.totalPrice, 0);
+
+        const yesterdayRevenue = completedOrders
+            .filter(o => new Date(o.createdAt) >= startOfYesterday && new Date(o.createdAt) < startOfToday)
+            .reduce((sum, o) => sum + o.totalPrice, 0);
+
+        let revenueTrend = 0;
+        if (yesterdayRevenue > 0) {
+            revenueTrend = ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100;
+        } else if (todayRevenue > 0) {
+            revenueTrend = 100; // 100% gain if yesterday was 0
+        }
+
+        // Charts: Weekly Production (last 7 days — sum of quantities sold per day)
+        const weeklyProductionValues = [];
+        for (let i = 6; i >= 0; i--) {
+            const dayStart = new Date(startOfToday);
+            dayStart.setDate(dayStart.getDate() - i);
+            const dayEnd = new Date(dayStart);
+            dayEnd.setDate(dayEnd.getDate() + 1);
+
+            const daySales = completedOrders
+                .filter(o => {
+                    const d = new Date(o.createdAt);
+                    return d >= dayStart && d < dayEnd;
+                });
+
+            // Sum quantities from associated products
+            const dayQty = daySales.reduce((sum, o) => {
+                const prod = farm.products.find(p => p.order && p.order.id === o.id);
+                return sum + (prod ? prod.quantity : 0);
+            }, 0);
+            weeklyProductionValues.push(dayQty);
+        }
+
+        // Charts: Monthly Revenue (last 6 months — sum of completed order value per month)
+        const monthlyRevenueValues = [];
+        for (let i = 5; i >= 0; i--) {
+            const monthStart = new Date();
+            monthStart.setDate(1);
+            monthStart.setHours(0, 0, 0, 0);
+            monthStart.setMonth(monthStart.getMonth() - i);
+
+            const monthEnd = new Date(monthStart);
+            monthEnd.setMonth(monthEnd.getMonth() + 1);
+
+            const monthRevenue = completedOrders
+                .filter(o => {
+                    const d = new Date(o.createdAt);
+                    return d >= monthStart && d < monthEnd;
+                })
+                .reduce((sum, o) => sum + o.totalPrice, 0);
+            monthlyRevenueValues.push(monthRevenue);
+        }
+
+        res.json({
+            ...farm,
+            totalBirds,
+            birdsTrend: parseFloat(birdsTrend.toFixed(1)),
+            eggsToday,
+            eggsTrend: parseFloat(eggsTrend.toFixed(1)),
+            feedRemaining,
+            feedTrend: parseFloat(feedTrend.toFixed(1)),
+            todayRevenue,
+            revenueTrend: parseFloat(revenueTrend.toFixed(1)),
+            weeklyProductionValues,
+            monthlyRevenueValues
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Get Farmer Profile (Account Screen)
+app.get('/farm/profile', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.id },
+            include: { farm: true }
+        });
+
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const mainFarm = user.farm;
+
+        res.json({
+            id: user.id,
+            fullName: user.name,
+            email: user.email,
+            phone: user.phone || 'N/A',
+            farmName: mainFarm ? mainFarm.name : 'Unknown Farm',
+            location: mainFarm ? (mainFarm.location || 'Unknown Location') : 'Unknown Location'
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Update Farmer Profile (Edit Profile Screen)
+app.put('/farm/profile', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+    const { fullName, phone, farmName, location } = req.body;
+
+    try {
+        // Transaction to update both User and Farm
+        const updatedData = await prisma.$transaction(async (tx) => {
+            // Update User details
+            const updatedUser = await tx.user.update({
+                where: { id: req.user.id },
+                data: {
+                    name: fullName,
+                    phone: phone
+                }
+            });
+
+            // Find primary farm
+            const userFarm = await tx.farm.findUnique({ where: { ownerId: req.user.id } });
+            if (userFarm) {
+                // Update Farm details
+                await tx.farm.update({
+                    where: { id: userFarm.id },
+                    data: {
+                        name: farmName,
+                        location: location
+                    }
+                });
+            }
+            return updatedUser;
+        });
+
+        res.json({ message: "Profile updated successfully", user: updatedData.id });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -138,6 +378,476 @@ app.post('/farm/batch', authenticateToken, async (req, res) => {
             }
         });
         res.json(batch);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Get Batch Details by ID
+app.get('/farm/batch/:id', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+    try {
+        const farm = await prisma.farm.findUnique({ where: { ownerId: req.user.id } });
+        if (!farm) return res.status(404).json({ error: 'Farm not found' });
+
+        const batch = await prisma.batch.findFirst({
+            where: { id: parseInt(req.params.id), farmId: farm.id },
+            include: {
+                mortalityRecords: { orderBy: { date: 'desc' } },
+                vaccinationRecords: { orderBy: { scheduledDate: 'asc' } },
+                feedLogs: { orderBy: { date: 'desc' }, take: 7 }
+            }
+        });
+
+        if (!batch) return res.status(404).json({ error: 'Batch not found' });
+
+        const weeksOld = Math.floor(batch.ageDays / 7);
+        const mortalityRate = batch.count > 0 ? ((batch.mortality / (batch.count + batch.mortality)) * 100) : 0;
+        const totalFeedKg = batch.feedLogs.reduce((sum, f) => sum + f.amountKg, 0);
+        const avgDailyFeedKg = batch.count > 0 ? batch.count * 0.12 : 0;
+
+        res.json({
+            id: batch.id,
+            name: `${batch.type.charAt(0) + batch.type.slice(1).toLowerCase()}s`,
+            type: batch.type,
+            count: batch.count,
+            ageDays: batch.ageDays,
+            weeksOld,
+            mortality: batch.mortality,
+            mortalityRate: parseFloat(mortalityRate.toFixed(1)),
+            startedAt: batch.startedAt,
+            mortalityRecords: batch.mortalityRecords.map(m => ({
+                id: m.id, count: m.count, cause: m.cause, date: m.date
+            })),
+            vaccinationRecords: batch.vaccinationRecords.map(v => ({
+                id: v.id, name: v.name, scheduledDate: v.scheduledDate, status: v.status
+            })),
+            feedLogs: batch.feedLogs.map(f => ({
+                id: f.id, amountKg: f.amountKg, date: f.date, notes: f.notes
+            })),
+            totalFeedKg: parseFloat(totalFeedKg.toFixed(1)),
+            avgDailyFeedKg: parseFloat(avgDailyFeedKg.toFixed(1))
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Add Mortality Record
+app.post('/farm/batch/:id/mortality', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+    const batchId = parseInt(req.params.id);
+    const { count, cause } = req.body;
+    try {
+        const batch = await prisma.batch.findUnique({ where: { id: batchId } });
+        if (!batch) return res.status(404).json({ error: 'Batch not found' });
+
+        await prisma.$transaction(async (tx) => {
+            await tx.mortalityRecord.create({
+                data: { batchId, count: parseInt(count), cause }
+            });
+            await tx.batch.update({
+                where: { id: batchId },
+                data: {
+                    mortality: { increment: parseInt(count) },
+                    count: { decrement: parseInt(count) }
+                }
+            });
+        });
+        res.json({ message: 'Mortality logged successfully' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Add Vaccination Record
+app.post('/farm/batch/:id/vaccination', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+    const batchId = parseInt(req.params.id);
+    const { name, scheduledDate, status } = req.body;
+    try {
+        const record = await prisma.vaccinationRecord.create({
+            data: {
+                batchId,
+                name,
+                scheduledDate: new Date(scheduledDate),
+                status: status || 'Completed'
+            }
+        });
+        res.json({ message: 'Vaccination logged successfully', record });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Add Feed Log
+app.post('/farm/batch/:id/feed', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+    const batchId = parseInt(req.params.id);
+    const { amountKg, notes } = req.body;
+    try {
+        const log = await prisma.feedLog.create({
+            data: {
+                batchId,
+                amountKg: parseFloat(amountKg),
+                notes: notes || ''
+            }
+        });
+        res.json({ message: 'Feed logged successfully', log });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Get Farm Inventory (Batches with status)
+app.get('/farm/inventory', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+    try {
+        const farm = await prisma.farm.findUnique({
+            where: { ownerId: req.user.id },
+            include: {
+                batches: {
+                    orderBy: { startedAt: 'desc' }
+                },
+                inventory: true,
+                products: {
+                    where: { status: 'SOLD' },
+                    select: { type: true, status: true }
+                }
+            }
+        });
+        if (!farm) return res.status(404).json({ error: 'Farm not found' });
+
+        // Determine batch status: if all of a batch type has been sold out → Sold, else Active
+        const soldTypes = farm.products.map(p => p.type);
+
+        const batches = farm.batches.map((b, idx) => {
+            const weeksOld = Math.floor(b.ageDays / 7);
+            const mortalityRate = b.count > 0 ? ((b.mortality / (b.count + b.mortality)) * 100) : 0;
+            const batchStatus = soldTypes.includes(b.type) && b.count === 0 ? 'Sold' : 'Active';
+
+            return {
+                id: b.id,
+                name: `Batch ${String.fromCharCode(65 + idx)} - ${b.type.charAt(0) + b.type.slice(1).toLowerCase()}s`,
+                type: b.type,
+                count: b.count,
+                ageDays: b.ageDays,
+                weeksOld,
+                mortalityRate: parseFloat(mortalityRate.toFixed(1)),
+                status: batchStatus,
+                startedAt: b.startedAt
+            };
+        });
+
+        res.json({
+            batches,
+            feedKg: farm.inventory?.feedKg || 0,
+            medicineCount: farm.inventory?.medicineCount || 0
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Add Sale (Farmer records a completed sale)
+app.post('/farm/sale', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+    const { productType, quantity, pricePerUnit, buyerName, notes, paymentStatus } = req.body;
+
+    if (!productType || !quantity || !pricePerUnit) {
+        return res.status(400).json({ error: 'productType, quantity and pricePerUnit are required' });
+    }
+
+    try {
+        const farm = await prisma.farm.findUnique({ where: { ownerId: req.user.id } });
+        if (!farm) return res.status(404).json({ error: 'Farm not found' });
+
+        const totalPrice = parseFloat(pricePerUnit) * parseInt(quantity);
+
+        // Use a transaction to create product listing + order atomically
+        const result = await prisma.$transaction(async (tx) => {
+            // Create a product listing marked as SOLD
+            const product = await tx.productRequest.create({
+                data: {
+                    farmId: farm.id,
+                    type: productType,
+                    quantity: parseInt(quantity),
+                    pricePerUnit: parseFloat(pricePerUnit),
+                    status: 'SOLD'
+                }
+            });
+
+            // Create a COMPLETED order against it (using the farm owner as both for direct sales)
+            const order = await tx.order.create({
+                data: {
+                    customerId: req.user.id,
+                    productId: product.id,
+                    totalPrice,
+                    status: 'COMPLETED',
+                    buyerName: buyerName || 'Walk-in Customer',
+                    notes: notes || '',
+                    paymentStatus: paymentStatus || 'Paid'
+                }
+            });
+
+            return { product, order, totalPrice };
+        });
+
+        res.json({
+            id: result.order.id,
+            productType: result.product.type,
+            quantity: result.product.quantity,
+            pricePerUnit: result.product.pricePerUnit,
+            totalPrice: result.totalPrice,
+            buyerName: result.order.buyerName,
+            notes: result.order.notes,
+            paymentStatus: result.order.paymentStatus,
+            status: 'COMPLETED',
+            message: 'Sale recorded successfully'
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Get Farm Sales History
+app.get('/farm/sales', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+    try {
+        const farm = await prisma.farm.findUnique({ where: { ownerId: req.user.id } });
+        if (!farm) return res.status(404).json({ error: 'Farm not found' });
+
+        const products = await prisma.productRequest.findMany({
+            where: { farmId: farm.id, status: 'SOLD' },
+            include: { order: true },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        const sales = products.map(p => {
+            const hasOrder = !!p.order;
+            const fallbackStatus = hasOrder ? 'Pending' : 'Paid';
+            const sale = {
+                id: p.order?.id || p.id,
+                productType: p.type,
+                quantity: p.quantity,
+                pricePerUnit: p.pricePerUnit,
+                totalPrice: p.order?.totalPrice || (p.quantity * p.pricePerUnit),
+                buyerName: p.order?.buyerName || 'Walk-in Customer',
+                notes: p.order?.notes || '',
+                paymentStatus: p.order?.paymentStatus || fallbackStatus,
+                status: p.order?.status || 'SOLD',
+                createdAt: p.createdAt
+            };
+            console.log(`Sale ID: ${sale.id}, Type: ${hasOrder ? 'Marketplace' : 'Direct'}, Payment: ${sale.paymentStatus}`);
+            return sale;
+        });
+
+        res.json(sales);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Get Single Sale Detail (Farmer)
+app.get('/farm/sale/:id', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+    const orderId = parseInt(req.params.id);
+    try {
+        const order = await prisma.order.findUnique({
+            where: { id: orderId },
+            include: {
+                product: true,
+                customer: { select: { name: true, phone: true } }
+            }
+        });
+
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+
+        // Transform into standardized format
+        res.json({
+            id: order.id,
+            productType: order.product.type,
+            quantity: order.product.quantity,
+            pricePerUnit: order.product.pricePerUnit,
+            totalPrice: order.totalPrice,
+            buyerName: order.buyerName || order.customer?.name || 'Customer',
+            buyerPhone: order.customer?.phone || null,
+            buyerType: order.customer ? 'Marketplace User' : 'Walk-in',
+            notes: order.notes,
+            paymentStatus: order.paymentStatus,
+            paymentMethod: 'Other',
+            status: order.status,
+            createdAt: order.createdAt
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Mark Sale as Paid
+app.patch('/farm/sale/:id/mark-paid', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+    const orderId = parseInt(req.params.id);
+    try {
+        await prisma.order.update({
+            where: { id: orderId },
+            data: {
+                paymentStatus: 'Paid',
+                status: 'COMPLETED' // Mark order as completed once paid
+            }
+        });
+        res.json({ message: 'Order marked as paid' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Add Expense
+app.post('/farm/expense', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+    const { category, amount, date, description } = req.body;
+    try {
+        const farm = await prisma.farm.findUnique({ where: { ownerId: req.user.id } });
+        if (!farm) return res.status(404).json({ error: 'Farm not found' });
+
+        const expense = await prisma.expense.create({
+            data: {
+                farmId: farm.id,
+                category,
+                amount: parseFloat(amount),
+                date: new Date(date),
+                description: description || ''
+            }
+        });
+        res.json({ message: 'Expense added successfully', expense });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Get Farm Analytics
+app.get('/farm/analytics', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+    try {
+        const farm = await prisma.farm.findUnique({ where: { ownerId: req.user.id } });
+        if (!farm) return res.status(404).json({ error: 'Farm not found' });
+
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        // Calculate Monthly Expenses
+        const expenses = await prisma.expense.findMany({
+            where: {
+                farmId: farm.id,
+                date: { gte: startOfMonth }
+            }
+        });
+        const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+
+        // Group expenses by category
+        const expenseBreakdown = {
+            Feed: 0,
+            Labor: 0,
+            Medication: 0,
+            Utilities: 0,
+            Other: 0
+        };
+        expenses.forEach(e => {
+            if (expenseBreakdown[e.category] !== undefined) {
+                expenseBreakdown[e.category] += e.amount;
+            } else {
+                expenseBreakdown.Other += e.amount;
+            }
+        });
+
+        // Calculate Monthly Revenue (from completed orders/sales)
+        const products = await prisma.productRequest.findMany({
+            where: { farmId: farm.id, status: 'SOLD' },
+            include: { order: true }
+        });
+
+        let totalRevenue = 0;
+        // Simplified Revenue trend: array of weekly revenue within this month, Mocking a 5-week array for visual shape
+        let revenueTrend = [0, 0, 0, 0, 0];
+
+        products.forEach(p => {
+            // Check if sold this month (assuming created or order created this month)
+            const saleDate = p.order ? p.order.createdAt : p.createdAt;
+            if (saleDate >= startOfMonth) {
+                const amount = p.order ? p.order.totalPrice : (p.quantity * p.pricePerUnit);
+                totalRevenue += amount;
+
+                // Quick approx logic for week bucket
+                const dayOfMonth = saleDate.getDate();
+                const weekIndex = Math.min(Math.floor((dayOfMonth - 1) / 7), 4);
+                revenueTrend[weekIndex] += amount;
+            }
+        });
+
+        // Convert Breakdown to array for UI
+        const breakdownList = Object.entries(expenseBreakdown)
+            .filter(([_, amount]) => amount >= 0) // keep all for UI completeness or filter empty
+            .map(([category, amount]) => ({ category, amount }));
+
+        res.json({
+            revenue: totalRevenue,
+            expenses: totalExpenses,
+            netProfit: totalRevenue - totalExpenses,
+            expenseBreakdown: breakdownList,
+            revenueTrend
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Get single sale detail
+app.get('/farm/sale/:id', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+    try {
+        const orderId = parseInt(req.params.id);
+        const order = await prisma.order.findUnique({
+            where: { id: orderId },
+            include: {
+                product: { include: { farm: { include: { owner: true } } } },
+                customer: true
+            }
+        });
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+
+        res.json({
+            id: order.id,
+            productType: order.product.type,
+            quantity: order.product.quantity,
+            pricePerUnit: order.product.pricePerUnit,
+            totalPrice: order.totalPrice,
+            buyerName: order.buyerName || order.customer?.name || 'Walk-in Customer',
+            notes: order.notes || '',
+            paymentStatus: order.paymentStatus || 'Paid',
+            status: order.status,
+            createdAt: order.createdAt,
+            // Customer info fields (from buyer or recorded)
+            buyerPhone: null,
+            buyerAddress: null,
+            buyerType: 'Regular customer',
+            paymentMethod: 'Bank Transfer',
+            dueDate: order.createdAt
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Mark sale as paid
+app.patch('/farm/sale/:id/mark-paid', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+    try {
+        const orderId = parseInt(req.params.id);
+        const updated = await prisma.order.update({
+            where: { id: orderId },
+            data: { paymentStatus: 'Paid' }
+        });
+        res.json({ id: updated.id, paymentStatus: updated.paymentStatus, message: 'Marked as paid' });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -181,30 +891,62 @@ app.get('/market/listings', async (req, res) => {
 app.post('/market/order', authenticateToken, async (req, res) => {
     const { productId } = req.body;
     try {
-        const product = await prisma.productRequest.findUnique({ where: { id: productId } });
+        const pId = parseInt(productId, 10);
+        const product = await prisma.productRequest.findUnique({
+            where: { id: pId },
+            include: { farm: true }
+        });
+
         if (!product || product.status !== 'AVAILABLE') {
             return res.status(400).json({ error: 'Product not available' });
         }
 
+        // Get customer name for the order record
+        const customer = await prisma.user.findUnique({ where: { id: req.user.id } });
+
         // Transaction to update product status and create order
         const order = await prisma.$transaction(async (tx) => {
             await tx.productRequest.update({
-                where: { id: productId },
+                where: { id: pId },
                 data: { status: 'SOLD' }
             });
 
             return await tx.order.create({
                 data: {
                     customerId: req.user.id,
-                    productId: productId,
+                    productId: pId,
                     totalPrice: product.pricePerUnit * product.quantity,
-                    status: 'PENDING'
+                    status: 'PENDING',
+                    buyerName: customer?.name || 'Customer',
+                    paymentStatus: 'Pending',
+                    notes: `Order for ${product.type}`
                 }
             });
         });
 
         res.json(order);
     } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Get My Orders (Customer)
+app.get('/market/my-orders', authenticateToken, async (req, res) => {
+    console.log(`[${new Date().toISOString()}] GET /market/my-orders for User ID: ${req.user.id}`);
+    try {
+        const orders = await prisma.order.findMany({
+            where: { customerId: req.user.id },
+            include: {
+                product: {
+                    include: { farm: true }
+                }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        console.log(`Found ${orders.length} orders for User ID: ${req.user.id}`);
+        res.json(orders);
+    } catch (e) {
+        console.error('Error fetching orders:', e);
         res.status(500).json({ error: e.message });
     }
 });
@@ -839,7 +1581,7 @@ app.get('/admin/reports', async (req, res) => {
 });
 
 // Start Server
-app.listen(PORT, async () => {
+app.listen(PORT, '0.0.0.0', async () => {
     console.log(`Server running on port ${PORT}`);
     await seedAdminUser();
 });

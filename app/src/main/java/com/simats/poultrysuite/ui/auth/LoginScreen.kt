@@ -43,8 +43,8 @@ fun LoginScreen(
                 val destination = when (state.role) {
                     "FARMER" -> Screen.Dashboard.route
                     "ADMIN" -> Screen.Admin.route
-                    "CUSTOMER" -> Screen.Marketplace.route
-                    else -> Screen.Marketplace.route
+                    "CUSTOMER" -> Screen.CustomerDashboard.route
+                    else -> Screen.Dashboard.route // Farmers go to Dashboard
                 }
                 navController.navigate(destination) {
                     popUpTo(Screen.Login.route) { inclusive = true }

@@ -46,15 +46,9 @@ fun RegisterScreen(
         when (val state = registerState) {
             is LoginState.Success -> {
                 Toast.makeText(context, "Registration Successful", Toast.LENGTH_SHORT).show()
-                val destination = when (state.role) {
-                    "FARMER" -> Screen.Dashboard.route
-                    "ADMIN" -> Screen.Admin.route
-                    "CUSTOMER" -> Screen.Marketplace.route
-                    else -> Screen.Marketplace.route
-                }
+                val destination = Screen.Login.route
                 navController.navigate(destination) {
                     popUpTo(Screen.Register.route) { inclusive = true }
-                    popUpTo(Screen.Login.route) { inclusive = true }
                 }
             }
             is LoginState.Error -> {

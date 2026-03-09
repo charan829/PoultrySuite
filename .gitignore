@@ -13,3 +13,12 @@
 .externalNativeBuild
 .cxx
 local.properties
+/app/build/
+/backend/node_modules/
+/backend/.env
+/_maintenance/
+*.log
+.DS_Store
+.idea/
+.gradle/
+*.iml

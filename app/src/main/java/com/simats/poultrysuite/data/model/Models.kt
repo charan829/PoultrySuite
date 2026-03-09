@@ -1,12 +1,34 @@
 package com.simats.poultrysuite.data.model
 
+data class UserResponse(
+    val id: String,
+    val email: String,
+    val name: String,
+    val phone: String,
+    val role: String
+)
+
 data class Farm(
     val id: String,
     val ownerId: String,
     val name: String,
     val location: String?,
     val batches: List<Batch>?,
-    val inventory: List<Inventory>?
+    val inventory: List<Inventory>?,
+    
+    // KPI Metrics
+    val totalBirds: Int? = 0,
+    val birdsTrend: Double? = 0.0,
+    val eggsToday: Int? = 0,
+    val eggsTrend: Double? = 0.0,
+    val feedRemaining: Double? = 0.0,
+    val feedTrend: Double? = 0.0,
+    val todayRevenue: Double? = 0.0,
+    val revenueTrend: Double? = 0.0,
+    
+    // Charts
+    val weeklyProductionValues: List<Double>? = null,
+    val monthlyRevenueValues: List<Double>? = null
 )
 
 data class Batch(
@@ -24,6 +46,118 @@ data class Inventory(
     val medicine: String?
 )
 
+data class FarmerProfile(
+    val id: String,
+    val fullName: String,
+    val email: String,
+    val phone: String,
+    val farmName: String,
+    val location: String
+)
+
+data class FarmerProfileUpdateRequest(
+    val fullName: String,
+    val phone: String,
+    val farmName: String,
+    val location: String
+)
+
+data class SaleRequest(
+    val productType: String,
+    val quantity: Int,
+    val pricePerUnit: Double,
+    val buyerName: String,
+    val notes: String,
+    val paymentStatus: String = "Paid"
+)
+
+data class SaleRecord(
+    val id: String,
+    val productType: String,
+    val quantity: Int,
+    val pricePerUnit: Double,
+    val totalPrice: Double,
+    val buyerName: String,
+    val notes: String,
+    val paymentStatus: String,
+    val status: String,
+    val createdAt: String
+)
+
+data class InventoryBatch(
+    val id: String,
+    val name: String,
+    val type: String,
+    val count: Int,
+    val ageDays: Int,
+    val weeksOld: Int,
+    val mortalityRate: Double,
+    val status: String,
+    val startedAt: String
+)
+
+data class InventoryResponse(
+    val batches: List<InventoryBatch>,
+    val feedKg: Double,
+    val medicineCount: Int
+)
+
+data class MortalityRecord(
+    val id: String,
+    val count: Int,
+    val cause: String,
+    val date: String
+)
+
+data class VaccinationRecord(
+    val id: String,
+    val name: String,
+    val scheduledDate: String,
+    val status: String
+)
+
+data class FeedLog(
+    val id: String,
+    val amountKg: Double,
+    val date: String,
+    val notes: String?
+)
+
+data class BatchDetail(
+    val id: String,
+    val name: String,
+    val type: String,
+    val count: Int,
+    val ageDays: Int,
+    val weeksOld: Int,
+    val mortality: Int,
+    val mortalityRate: Double,
+    val startedAt: String,
+    val mortalityRecords: List<MortalityRecord>,
+    val vaccinationRecords: List<VaccinationRecord>,
+    val feedLogs: List<FeedLog>,
+    val totalFeedKg: Double,
+    val avgDailyFeedKg: Double
+)
+
+data class OrderDetail(
+    val id: String,
+    val productType: String,
+    val quantity: Int,
+    val pricePerUnit: Double,
+    val totalPrice: Double,
+    val buyerName: String,
+    val notes: String?,
+    val paymentStatus: String,
+    val status: String,
+    val createdAt: String,
+    val buyerPhone: String?,
+    val buyerAddress: String?,
+    val buyerType: String,
+    val paymentMethod: String,
+    val dueDate: String?
+)
+
 data class ProductRequest(
     val id: String,
     val farmId: String,
@@ -39,7 +173,9 @@ data class Order(
     val customerId: String,
     val productId: String,
     val totalPrice: Double,
-    val status: String
+    val status: String,
+    val createdAt: String? = null,
+    val product: ProductRequest? = null
 )
 
 data class AdminStats(

@@ -2,10 +2,12 @@ package com.simats.poultrysuite.data.remote
 
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import com.simats.poultrysuite.data.model.Farm
+import com.simats.poultrysuite.data.model.OrderDetail
 import com.simats.poultrysuite.data.model.ProductRequest
 import com.simats.poultrysuite.data.model.Order
 import com.simats.poultrysuite.data.model.AdminStats
@@ -23,11 +25,41 @@ interface PoultryApi {
     @POST("auth/login")
     suspend fun login(@Body request: com.simats.poultrysuite.data.model.LoginRequest): com.simats.poultrysuite.data.model.LoginResponse
     
+    @GET("auth/me")
+    suspend fun getProfile(): com.simats.poultrysuite.data.model.UserResponse
+
+    @PUT("auth/profile")
+    suspend fun updateProfile(@Body request: Map<String, String>): com.simats.poultrysuite.data.model.UserResponse
+    
     @POST("auth/register")
     suspend fun register(@Body request: com.simats.poultrysuite.data.model.RegisterRequest): com.simats.poultrysuite.data.model.RegisterResponse
     
     @GET("farm/dashboard")
     suspend fun getDashboard(): Farm
+    
+    @GET("farm/profile")
+    suspend fun getFarmerProfile(): com.simats.poultrysuite.data.model.FarmerProfile
+    
+    @PUT("farm/profile")
+    suspend fun updateFarmerProfile(@Body request: com.simats.poultrysuite.data.model.FarmerProfileUpdateRequest): retrofit2.Response<Unit>
+    
+    @POST("farm/sale")
+    suspend fun addSale(@Body request: com.simats.poultrysuite.data.model.SaleRequest): retrofit2.Response<com.simats.poultrysuite.data.model.SaleRecord>
+    
+    @GET("farm/sales")
+    suspend fun getSales(): List<com.simats.poultrysuite.data.model.SaleRecord>
+
+    @GET("farm/sale/{id}")
+    suspend fun getOrderDetail(@Path("id") id: String): OrderDetail
+
+    @PATCH("farm/sale/{id}/mark-paid")
+    suspend fun markSaleAsPaid(@Path("id") id: String): retrofit2.Response<Unit>
+
+    @GET("farm/inventory")
+    suspend fun getInventory(): com.simats.poultrysuite.data.model.InventoryResponse
+
+    @GET("farm/batch/{id}")
+    suspend fun getBatchDetail(@retrofit2.http.Path("id") id: String): com.simats.poultrysuite.data.model.BatchDetail
     
     @GET("market/listings")
     suspend fun getListings(): List<ProductRequest>
@@ -35,12 +67,39 @@ interface PoultryApi {
     @POST("market/listing")
     suspend fun createListing(@Body request: Map<String, String>): ProductRequest
     
+    @GET("market/my-orders")
+    suspend fun getMyOrders(): List<Order>
+    
     @POST("market/order")
     suspend fun placeOrder(@Body request: Map<String, String>): Order
     
     @POST("farm/batch")
     suspend fun addBatch(@Body request: Map<String, String>): com.simats.poultrysuite.data.model.Batch
     
+    @POST("farm/batch/{id}/mortality")
+    suspend fun logMortality(
+        @retrofit2.http.Path("id") id: String,
+        @Body request: Map<String, String>
+    ): retrofit2.Response<Unit>
+
+    @POST("farm/batch/{id}/vaccination")
+    suspend fun logVaccination(
+        @retrofit2.http.Path("id") id: String,
+        @Body request: Map<String, String>
+    ): retrofit2.Response<Unit>
+
+    @POST("farm/batch/{id}/feed")
+    suspend fun logFeed(
+        @retrofit2.http.Path("id") id: String,
+        @Body request: Map<String, String>
+    ): retrofit2.Response<Unit>
+
+    @POST("farm/expense")
+    suspend fun addExpense(@Body request: Map<String, String>): retrofit2.Response<Unit>
+
+    @GET("farm/analytics")
+    suspend fun getAnalytics(): com.simats.poultrysuite.data.model.AnalyticsResponse
+
     @GET("admin/stats")
     suspend fun getAdminStats(): AdminStats
 

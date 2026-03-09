@@ -2,185 +2,334 @@ package com.simats.poultrysuite.ui.sales
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import com.simats.poultrysuite.data.model.TransactionDetails
-import com.simats.poultrysuite.ui.admin.formatCurrency
+import com.simats.poultrysuite.data.model.OrderDetail
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionDetailsScreen(
     transactionId: String,
     navController: NavController,
-    viewModel: SalesViewModel = hiltViewModel()
+    viewModel: OrderDetailViewModel = hiltViewModel()
 ) {
-    val transactionState by viewModel.transactionState.collectAsState()
+    val state by viewModel.state.collectAsState()
 
     LaunchedEffect(transactionId) {
-        viewModel.loadTransactionDetails(transactionId)
+        viewModel.loadOrder(transactionId)
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Transaction Details") },
+                title = {
+                    Text(
+                        "Order Details",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = Color(0xFF1E293B)
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color(0xFF1E293B))
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFFF8F9FA))
             )
         },
-        containerColor = Color(0xFFF5F7FA)
+        containerColor = Color(0xFFF8F9FA)
     ) { padding ->
-        when (val state = transactionState) {
-            is TransactionState.Loading -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Color(0xFF1565C0))
+        when (val s = state) {
+            is OrderDetailState.Loading -> Box(
+                Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center
+            ) { CircularProgressIndicator(color = Color(0xFF1565C0)) }
+
+            is OrderDetailState.Error -> Box(
+                Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(s.message, color = Color(0xFF94A3B8))
+                    TextButton({ viewModel.loadOrder(transactionId) }) {
+                        Text("Retry", color = Color(0xFF1565C0))
+                    }
                 }
             }
-            is TransactionState.Error -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Error: ${state.message}", color = Color.Red)
-                }
-            }
-            is TransactionState.Success -> {
-                TransactionDetailsContent(state.details, padding)
-            }
+
+            is OrderDetailState.Success -> OrderDetailsContent(
+                order = s.order,
+                padding = padding,
+                onMarkPaid = { viewModel.markAsPaid(transactionId) }
+            )
         }
     }
 }
 
 @Composable
-fun TransactionDetailsContent(details: TransactionDetails, padding: PaddingValues) {
+private fun OrderDetailsContent(
+    order: OrderDetail,
+    padding: PaddingValues,
+    onMarkPaid: () -> Unit
+) {
+    val isPaid = order.paymentStatus.equals("Paid", ignoreCase = true)
+    val statusColor = when (order.paymentStatus.lowercase()) {
+        "paid" -> Color(0xFF22C55E)
+        "pending" -> Color(0xFFF59E0B)
+        else -> Color(0xFF1565C0)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(padding)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Status Card
+        // ──── Order Summary Card ────────────────────────────────────
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            elevation = CardDefaults.cardElevation(0.dp)
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
-                    tint = Color(0xFF2E7D32),
-                    modifier = Modifier.size(64.dp)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Order #${order.id}",
+                        fontSize = 13.sp,
+                        color = Color(0xFF94A3B8)
+                    )
+                    Text(
+                        order.paymentStatus,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = statusColor
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
                 Text(
-                    text = formatCurrency(details.amount),
-                    style = MaterialTheme.typography.headlineLarge,
+                    "₹${"%,.0f".format(order.totalPrice)}",
+                    fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF1E293B)
                 )
-                Text(
-                    text = details.status,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color(0xFF2E7D32)
+
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = Color(0xFFF1F5F9))
+                Spacer(Modifier.height(16.dp))
+
+                // Product line
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "${order.quantity} ${order.productType.lowercase().replaceFirstChar { it.uppercaseChar() }}s",
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF1E293B)
+                    )
+                    Text(
+                        "₹${"%,.0f".format(order.pricePerUnit)} each",
+                        color = Color(0xFF1565C0),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Total", fontWeight = FontWeight.SemiBold, color = Color(0xFF1565C0))
+                    Text(
+                        "₹${"%,.0f".format(order.totalPrice)}",
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1565C0)
+                    )
+                }
+            }
+        }
+
+        // ──── Customer Information ──────────────────────────────────
+        SectionCard(title = "Customer Information") {
+            CustomerRow(
+                icon = Icons.Default.Person,
+                primaryText = order.buyerName.ifBlank { "Walk-in Customer" },
+                secondaryText = order.buyerType
+            )
+            if (!order.buyerPhone.isNullOrBlank()) {
+                Spacer(Modifier.height(12.dp))
+                CustomerRow(
+                    icon = Icons.Default.Phone,
+                    primaryText = order.buyerPhone,
+                    secondaryText = null
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = details.date.take(19).replace("T", " "),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
+            }
+            if (!order.buyerAddress.isNullOrBlank()) {
+                Spacer(Modifier.height(12.dp))
+                CustomerRow(
+                    icon = Icons.Default.LocationOn,
+                    primaryText = order.buyerAddress,
+                    secondaryText = null
+                )
+            }
+            if (!order.notes.isNullOrBlank()) {
+                Spacer(Modifier.height(12.dp))
+                CustomerRow(
+                    icon = Icons.Default.Notes,
+                    primaryText = order.notes,
+                    secondaryText = null
                 )
             }
         }
 
-        // Customer Info
-        InfoSectionCard(
-            title = "Customer Details",
-            icon = Icons.Default.Person,
-            content = {
-                InfoRow("Name", details.customer.name)
-                InfoRow("Email", details.customer.email)
-                InfoRow("Phone", details.customer.phone ?: "N/A")
+        // ──── Payment Status ────────────────────────────────────────
+        SectionCard(title = "Payment Status") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(Color(0xFFFFF3E0), RoundedCornerShape(8.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.CreditCard, null, tint = Color(0xFFFF9800), modifier = Modifier.size(18.dp))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(order.paymentMethod, fontWeight = FontWeight.SemiBold, color = Color(0xFF1E293B))
+                        Text(
+                            if (isPaid) "Payment received" else "Awaiting payment",
+                            fontSize = 12.sp,
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+                }
+                Text(
+                    order.paymentStatus,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = statusColor
+                )
             }
-        )
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.CalendarToday, null, tint = Color(0xFF94A3B8), modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Due: ${formatOrderDate(order.dueDate ?: order.createdAt)}",
+                    fontSize = 13.sp,
+                    color = Color(0xFF64748B)
+                )
+            }
+        }
 
-        // Product Info
-        InfoSectionCard(
-            title = "Product Details",
-            icon = Icons.Default.ShoppingBag,
-            content = {
-                InfoRow("Product", details.product.name)
-                InfoRow("Quantity", details.product.quantity.toString())
-                InfoRow("Price/Unit", formatCurrency(details.product.pricePerUnit))
-                InfoRow("Farm", details.product.farm)
-                InfoRow("Location", details.product.location ?: "Unknown")
+        Spacer(Modifier.height(8.dp))
+
+        // ──── Action Buttons ────────────────────────────────────────
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = { /* TODO: send reminder via SMS/notification */ },
+                modifier = Modifier.weight(1f).height(50.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1E293B))
+            ) {
+                Text("Send Reminder", fontWeight = FontWeight.SemiBold)
             }
-        )
+            Button(
+                onClick = onMarkPaid,
+                modifier = Modifier.weight(1f).height(50.dp),
+                enabled = !isPaid,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF2E7D32),
+                    disabledContainerColor = Color(0xFF94A3B8)
+                )
+            ) {
+                Text(if (isPaid) "Already Paid" else "Mark as Paid", fontWeight = FontWeight.SemiBold, color = Color.White)
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
     }
 }
 
 @Composable
-fun InfoSectionCard(title: String, icon: ImageVector, content: @Composable () -> Unit) {
+private fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        elevation = CardDefaults.cardElevation(0.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = icon, contentDescription = null, tint = Color(0xFF1565C0))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1E293B)
-                )
-            }
-            Divider(modifier = Modifier.padding(vertical = 12.dp), color = Color(0xFFF1F5F9))
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                title,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF1E293B),
+                fontSize = 15.sp
+            )
+            Spacer(Modifier.height(16.dp))
             content()
         }
     }
 }
 
 @Composable
-fun InfoRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(text = label, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            color = Color(0xFF1E293B)
-        )
+private fun CustomerRow(icon: ImageVector, primaryText: String, secondaryText: String?) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .background(Color(0xFFF1F5F9), RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, null, tint = Color(0xFF64748B), modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(primaryText, fontWeight = FontWeight.Medium, color = Color(0xFF1E293B), fontSize = 14.sp)
+            if (secondaryText != null) {
+                Text(secondaryText, fontSize = 12.sp, color = Color(0xFF94A3B8))
+            }
+        }
     }
+}
+
+private fun formatOrderDate(iso: String): String {
+    return try {
+        val fmt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
+        fmt.timeZone = TimeZone.getTimeZone("UTC")
+        SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(fmt.parse(iso) ?: return iso)
+    } catch (_: Exception) { iso }
 }

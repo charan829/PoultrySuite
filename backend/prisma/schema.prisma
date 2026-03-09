@@ -79,7 +79,37 @@ model Batch {
   mortality   Int       @default(0)
   startedAt   DateTime  @default(now())
 
-  // We could track daily stats here if needed
+  // Detail records
+  mortalityRecords    MortalityRecord[]
+  vaccinationRecords  VaccinationRecord[]
+  feedLogs            FeedLog[]
+}
+
+model MortalityRecord {
+  id        Int      @id @default(autoincrement())
+  batchId   Int
+  batch     Batch    @relation(fields: [batchId], references: [id])
+  count     Int
+  cause     String   // Unknown, Disease, Injury, etc.
+  date      DateTime @default(now())
+}
+
+model VaccinationRecord {
+  id            Int      @id @default(autoincrement())
+  batchId       Int
+  batch         Batch    @relation(fields: [batchId], references: [id])
+  name          String   // Newcastle Disease, Gumboro, etc.
+  scheduledDate DateTime
+  status        String   @default("Upcoming") // Upcoming, Completed, Missed
+}
+
+model FeedLog {
+  id       Int      @id @default(autoincrement())
+  batchId  Int
+  batch    Batch    @relation(fields: [batchId], references: [id])
+  amountKg Float
+  date     DateTime @default(now())
+  notes    String?
 }
 
 model Inventory {
@@ -105,7 +135,7 @@ model ProductRequest {
   id          Int           @id @default(autoincrement())
   farmId      Int
   farm        Farm          @relation(fields: [farmId], references: [id])
-  type        BatchType     // What are they selling?
+  type        String        // What are they selling? (e.g. Broilers, Eggs)
   quantity    Int
   pricePerUnit Float
   status      RequestStatus @default(AVAILABLE)
@@ -115,12 +145,17 @@ model ProductRequest {
 }
 
 model Order {
-  id          Int         @id @default(autoincrement())
-  customerId  Int
-  customer    User        @relation(fields: [customerId], references: [id])
-  productId   Int         @unique
-  product     ProductRequest @relation(fields: [productId], references: [id])
-  status      OrderStatus @default(PENDING)
-  totalPrice  Float
-  createdAt   DateTime    @default(now())
+  id            Int         @id @default(autoincrement())
+  customerId    Int
+  customer      User        @relation(fields: [customerId], references: [id])
+  productId     Int         @unique
+  product       ProductRequest @relation(fields: [productId], references: [id])
+  status        OrderStatus @default(PENDING)
+  totalPrice    Float
+  createdAt     DateTime    @default(now())
+
+  // Farmer direct sale fields (optional for marketplace orders)
+  buyerName     String?
+  notes         String?
+  paymentStatus String?     @default("Paid") // Paid, Pending, Partial
 }
