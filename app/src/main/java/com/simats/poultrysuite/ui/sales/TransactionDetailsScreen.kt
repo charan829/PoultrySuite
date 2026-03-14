@@ -1,5 +1,6 @@
 package com.simats.poultrysuite.ui.sales
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -7,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -14,12 +16,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.simats.poultrysuite.data.model.OrderDetail
+import com.simats.poultrysuite.ui.navigation.Screen
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -31,6 +35,9 @@ fun TransactionDetailsScreen(
     viewModel: OrderDetailViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
+    var isOpeningChat by remember { mutableStateOf(false) }
+    var isMarkingComplete by remember { mutableStateOf(false) }
 
     LaunchedEffect(transactionId) {
         viewModel.loadOrder(transactionId)
@@ -78,7 +85,42 @@ fun TransactionDetailsScreen(
             is OrderDetailState.Success -> OrderDetailsContent(
                 order = s.order,
                 padding = padding,
-                onMarkPaid = { viewModel.markAsPaid(transactionId) }
+                onMarkPaid = { viewModel.markAsPaid(transactionId) },
+                isMarkingComplete = isMarkingComplete,
+                onMarkComplete = {
+                    if (!isMarkingComplete) {
+                        isMarkingComplete = true
+                        viewModel.markAsComplete(
+                            id = transactionId,
+                            onSuccess = {
+                                isMarkingComplete = false
+                                Toast.makeText(context, "Order marked as complete", Toast.LENGTH_SHORT).show()
+                            },
+                            onError = { err ->
+                                isMarkingComplete = false
+                                Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
+                },
+                isOpeningChat = isOpeningChat,
+                onMessageCustomer = {
+                    if (isOpeningChat) return@OrderDetailsContent
+                    isOpeningChat = true
+                    viewModel.startConversationFromOrder(
+                        orderId = transactionId,
+                        onResult = { conversationId, partnerName ->
+                            isOpeningChat = false
+                            navController.navigate(Screen.FarmerChat.createRoute(conversationId, partnerName)) {
+                                launchSingleTop = true
+                            }
+                        },
+                        onError = { error ->
+                            isOpeningChat = false
+                            Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
             )
         }
     }
@@ -88,9 +130,14 @@ fun TransactionDetailsScreen(
 private fun OrderDetailsContent(
     order: OrderDetail,
     padding: PaddingValues,
-    onMarkPaid: () -> Unit
+    onMarkPaid: () -> Unit,
+    isMarkingComplete: Boolean = false,
+    onMarkComplete: () -> Unit = {},
+    isOpeningChat: Boolean,
+    onMessageCustomer: () -> Unit
 ) {
     val isPaid = order.paymentStatus.equals("Paid", ignoreCase = true)
+    val isComplete = order.status.lowercase(java.util.Locale.getDefault()).let { it == "completed" || it == "sold" }
     val statusColor = when (order.paymentStatus.lowercase()) {
         "paid" -> Color(0xFF22C55E)
         "pending" -> Color(0xFFF59E0B)
@@ -174,7 +221,34 @@ private fun OrderDetailsContent(
         }
 
         // ──── Customer Information ──────────────────────────────────
-        SectionCard(title = "Customer Information") {
+        SectionCard(
+            title = "Customer Information",
+            headerAction = {
+                FilledTonalButton(
+                    onClick = onMessageCustomer,
+                    enabled = !isOpeningChat,
+                    modifier = Modifier.height(30.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = Color(0xFFEFF6FF),
+                        contentColor = Color(0xFF1565C0)
+                    ),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Chat,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        if (isOpeningChat) "Opening..." else "Message",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        ) {
             CustomerRow(
                 icon = Icons.Default.Person,
                 primaryText = order.buyerName.ifBlank { "Walk-in Customer" },
@@ -280,12 +354,42 @@ private fun OrderDetailsContent(
             }
         }
 
+        // ──── Mark as Complete ───────────────────────────────────────
+        Button(
+            onClick = onMarkComplete,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            enabled = !isComplete && !isMarkingComplete,
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF1565C0),
+                disabledContainerColor = Color(0xFF94A3B8)
+            )
+        ) {
+            if (isMarkingComplete) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    color = Color.White,
+                    strokeWidth = 2.dp
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(
+                text = if (isComplete) "Order Completed" else "Mark as Complete",
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White
+            )
+        }
+
         Spacer(Modifier.height(16.dp))
     }
 }
 
 @Composable
-private fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
+private fun SectionCard(
+    title: String,
+    headerAction: (@Composable RowScope.() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -293,12 +397,19 @@ private fun SectionCard(title: String, content: @Composable ColumnScope.() -> Un
         elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                title,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF1E293B),
-                fontSize = 15.sp
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    title,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B),
+                    fontSize = 15.sp
+                )
+                headerAction?.invoke(this)
+            }
             Spacer(Modifier.height(16.dp))
             content()
         }

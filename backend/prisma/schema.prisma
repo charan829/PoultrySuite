@@ -44,8 +44,11 @@ model User {
   createdAt DateTime @default(now())
   
   // Relations
-  farm      Farm?
-  orders    Order[]
+  farm          Farm?
+  orders        Order[]
+  reviews       Review[]        @relation("CustomerReviews")
+  conversations Conversation[]  @relation("CustomerConversations")
+  sentMessages  Message[]       @relation("SentMessages")
 }
 
 enum UserStatus {
@@ -63,10 +66,12 @@ model Farm {
   createdAt   DateTime @default(now())
 
   // Relations
-  batches     Batch[]
-  inventory   Inventory?
-  expenses    Expense[]
-  products    ProductRequest[]
+  batches       Batch[]
+  inventory     Inventory?
+  expenses      Expense[]
+  products      ProductRequest[]
+  reviews       Review[]
+  conversations Conversation[]
 }
 
 model Batch {
@@ -158,4 +163,43 @@ model Order {
   buyerName     String?
   notes         String?
   paymentStatus String?     @default("Paid") // Paid, Pending, Partial
+
+    review        Review?
+}
+
+model Review {
+  id         Int      @id @default(autoincrement())
+  farmId     Int
+  farm       Farm     @relation(fields: [farmId], references: [id])
+  customerId Int
+  customer   User     @relation("CustomerReviews", fields: [customerId], references: [id])
+  orderId    Int      @unique
+  order      Order    @relation(fields: [orderId], references: [id])
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+}
+
+model Conversation {
+  id         Int       @id @default(autoincrement())
+  farmId     Int
+  farm       Farm      @relation(fields: [farmId], references: [id])
+  customerId Int
+  customer   User      @relation("CustomerConversations", fields: [customerId], references: [id])
+  messages   Message[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([farmId, customerId])
+}
+
+model Message {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  senderId       Int
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id])
+  content        String
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
 }

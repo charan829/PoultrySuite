@@ -51,4 +51,35 @@ class OrderDetailViewModel @Inject constructor(
             }
         }
     }
+
+    fun markAsComplete(id: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val response = api.markOrderComplete(id)
+                if (!response.isSuccessful) {
+                    onError("Server error: ${response.code()}")
+                    return@launch
+                }
+                loadOrder(id)
+                onSuccess()
+            } catch (e: Exception) {
+                onError(e.message ?: "Failed to mark as complete")
+            }
+        }
+    }
+
+    fun startConversationFromOrder(
+        orderId: String,
+        onResult: (conversationId: String, partnerName: String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val result = api.startConversationFromOrder(orderId)
+                onResult(result.id, result.partnerName)
+            } catch (e: Exception) {
+                onError(e.message ?: "Failed to open chat")
+            }
+        }
+    }
 }

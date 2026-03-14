@@ -55,6 +55,9 @@ interface PoultryApi {
     @PATCH("farm/sale/{id}/mark-paid")
     suspend fun markSaleAsPaid(@Path("id") id: String): retrofit2.Response<Unit>
 
+    @PATCH("farm/order/{id}/complete")
+    suspend fun markOrderComplete(@Path("id") id: String): retrofit2.Response<Unit>
+
     @GET("farm/inventory")
     suspend fun getInventory(): com.simats.poultrysuite.data.model.InventoryResponse
 
@@ -126,6 +129,35 @@ interface PoultryApi {
 
     @GET("admin/reports")
     suspend fun getReports(): AdminReportsResponse
+
+        @POST("review")
+        suspend fun submitReview(@Body request: com.simats.poultrysuite.data.model.ReviewRequest): retrofit2.Response<Unit>
+
+        @GET("review/farm/{farmId}")
+        suspend fun getFarmReviews(@Path("farmId") farmId: String): List<com.simats.poultrysuite.data.model.Review>
+
+        @GET("review/can-review/{farmId}")
+        suspend fun canReviewFarm(@Path("farmId") farmId: String): com.simats.poultrysuite.data.model.CanReviewResponse
+
+        // ─── Messaging ────────────────────────────────────────────────
+
+        @GET("messages/conversations")
+        suspend fun getConversations(): List<com.simats.poultrysuite.data.model.ConversationSummary>
+
+        @POST("messages/start/{farmId}")
+        suspend fun startConversation(@Path("farmId") farmId: String): com.simats.poultrysuite.data.model.StartConversationResponse
+
+        @POST("messages/start/order/{orderId}")
+        suspend fun startConversationFromOrder(@Path("orderId") orderId: String): com.simats.poultrysuite.data.model.StartFarmerConversationResponse
+
+        @GET("messages/{conversationId}")
+        suspend fun getMessages(@Path("conversationId") conversationId: String): List<com.simats.poultrysuite.data.model.ChatMessage>
+
+        @POST("messages/{conversationId}")
+        suspend fun sendMessage(
+            @Path("conversationId") conversationId: String,
+            @Body request: com.simats.poultrysuite.data.model.SendMessageRequest
+        ): com.simats.poultrysuite.data.model.ChatMessage
 }
 
 data class UserStatusUpdate(val status: String)

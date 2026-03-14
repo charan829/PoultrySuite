@@ -175,7 +175,13 @@ data class Order(
     val totalPrice: Double,
     val status: String,
     val createdAt: String? = null,
-    val product: ProductRequest? = null
+    val product: ProductRequest? = null,
+    val buyerName: String? = null,
+    val notes: String? = null,
+    val paymentStatus: String? = null,
+    val purchaseType: String? = null,
+    val deliveryAddress: String? = null,
+    val isReviewed: Boolean? = false
 )
 
 data class AdminStats(
@@ -250,6 +256,25 @@ data class TransactionItem(
     val amount: Double,
     val status: String,
     val date: String
+)
+
+data class Review(
+    val id: String,
+    val rating: Int,
+    val comment: String?,
+    val customerName: String,
+    val createdAt: String
+)
+
+data class ReviewRequest(
+    val orderId: String,
+    val rating: Int,
+    val comment: String?
+)
+
+data class CanReviewResponse(
+    val canReview: Boolean,
+    val orderId: String?
 )
 
 data class TransactionDetails(
@@ -345,3 +370,37 @@ data class LoginRequest(val email: String, val password: String)
 data class LoginResponse(val token: String, val role: String, val userId: String, val name: String?)
 data class RegisterRequest(val name: String, val email: String, val password: String, val role: String, val phone: String)
 data class RegisterResponse(val message: String, val userId: String)
+
+// ─── Messaging ────────────────────────────────────────────────────
+
+data class ConversationSummary(
+    val id: String,
+    val farmId: String,
+    val farmName: String,
+    val otherPartyName: String,
+    val lastMessage: String?,
+    val lastMessageTime: String?,
+    val unreadCount: Int
+)
+
+data class ChatMessage(
+    val id: String,
+    val content: String,
+    val senderId: String,
+    val isMine: Boolean,
+    val isRead: Boolean,
+    val createdAt: String
+)
+
+data class StartConversationResponse(
+    val id: String,
+    val farmId: String,
+    val farmName: String
+)
+
+data class StartFarmerConversationResponse(
+    val id: String,
+    val partnerName: String
+)
+
+data class SendMessageRequest(val content: String)

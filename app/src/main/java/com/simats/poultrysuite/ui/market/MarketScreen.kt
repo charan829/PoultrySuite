@@ -139,9 +139,12 @@ fun MarketScreen(
                                     colorIndex = s.listings.indexOf(item),
                                     isCustomer = userRole == "CUSTOMER",
                                     onBuy = { 
-                                        viewModel.placeOrder(item.id) {
+                                        viewModel.placeOrder(
+                                            productId = item.id,
+                                            onSuccess = {
                                             navController.navigate(Screen.CustomerOrderSuccess.route)
-                                        }
+                                            }
+                                        )
                                     }
                                 )
                             }

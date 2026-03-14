@@ -136,6 +136,24 @@ fun AppNavigation() {
         composable(com.simats.poultrysuite.ui.navigation.Screen.FarmerCreateListing.route) {
             com.simats.poultrysuite.ui.market.CreateListingScreen(navController = navController)
         }
+        composable(com.simats.poultrysuite.ui.navigation.Screen.FarmerMessages.route) {
+            com.simats.poultrysuite.ui.user.FarmerMessagesScreen(navController = navController)
+        }
+        composable(
+            route = com.simats.poultrysuite.ui.navigation.Screen.FarmerChat.route,
+            arguments = listOf(
+                androidx.navigation.navArgument("conversationId") { type = androidx.navigation.NavType.StringType },
+                androidx.navigation.navArgument("partnerName") { type = androidx.navigation.NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val conversationId = backStackEntry.arguments?.getString("conversationId") ?: return@composable
+            val partnerName = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("partnerName") ?: "", "UTF-8")
+            com.simats.poultrysuite.ui.user.FarmerChatScreen(
+                navController = navController,
+                conversationId = conversationId,
+                partnerName = partnerName
+            )
+        }
         composable(com.simats.poultrysuite.ui.navigation.Screen.Analytics.route) {
             com.simats.poultrysuite.ui.dashboard.analytics.AnalyticsScreen(navController = navController)
         }
@@ -148,6 +166,26 @@ fun AppNavigation() {
         composable(com.simats.poultrysuite.ui.navigation.Screen.CustomerOrders.route) {
             com.simats.poultrysuite.ui.customer.CustomerOrdersScreen(navController = navController)
         }
+        composable(
+            route = com.simats.poultrysuite.ui.navigation.Screen.CustomerOrderTracking.route,
+            arguments = listOf(androidx.navigation.navArgument("orderId") { type = androidx.navigation.NavType.StringType })
+        ) { backStackEntry ->
+            val orderId = backStackEntry.arguments?.getString("orderId") ?: return@composable
+            com.simats.poultrysuite.ui.customer.CustomerOrderTrackingScreen(
+                navController = navController,
+                orderId = orderId
+            )
+        }
+        composable(
+            route = com.simats.poultrysuite.ui.navigation.Screen.CustomerWriteReview.route,
+            arguments = listOf(androidx.navigation.navArgument("orderId") { type = androidx.navigation.NavType.StringType })
+        ) { backStackEntry ->
+            val orderId = backStackEntry.arguments?.getString("orderId") ?: return@composable
+            com.simats.poultrysuite.ui.customer.CustomerWriteReviewScreen(
+                navController = navController,
+                orderId = orderId
+            )
+        }
         composable(com.simats.poultrysuite.ui.navigation.Screen.CustomerProfile.route) {
             com.simats.poultrysuite.ui.profile.CustomerProfileScreen(navController = navController)
         }
@@ -158,6 +196,16 @@ fun AppNavigation() {
             val productId = backStackEntry.arguments?.getString("productId") ?: ""
             com.simats.poultrysuite.ui.customer.CustomerProductDetailsScreen(navController = navController, productId = productId)
         }
+        composable(
+            route = com.simats.poultrysuite.ui.navigation.Screen.CustomerFarmProfile.route,
+            arguments = listOf(androidx.navigation.navArgument("farmId") { type = androidx.navigation.NavType.StringType })
+        ) { backStackEntry ->
+            val farmId = backStackEntry.arguments?.getString("farmId") ?: return@composable
+            com.simats.poultrysuite.ui.customer.CustomerFarmProfileScreen(
+                navController = navController,
+                farmId = farmId
+            )
+        }
         composable(com.simats.poultrysuite.ui.navigation.Screen.CustomerOrderSuccess.route) {
             com.simats.poultrysuite.ui.customer.CustomerOrderSuccessScreen(navController = navController)
         }
@@ -166,6 +214,24 @@ fun AppNavigation() {
         }
         composable(com.simats.poultrysuite.ui.navigation.Screen.CustomerEditProfile.route) {
             com.simats.poultrysuite.ui.profile.CustomerEditProfileScreen(navController = navController)
+        }
+        composable(com.simats.poultrysuite.ui.navigation.Screen.CustomerMessages.route) {
+            com.simats.poultrysuite.ui.customer.CustomerMessagesScreen(navController = navController)
+        }
+        composable(
+            route = com.simats.poultrysuite.ui.navigation.Screen.CustomerChat.route,
+            arguments = listOf(
+                androidx.navigation.navArgument("conversationId") { type = androidx.navigation.NavType.StringType },
+                androidx.navigation.navArgument("farmName") { type = androidx.navigation.NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val conversationId = backStackEntry.arguments?.getString("conversationId") ?: return@composable
+            val farmName = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("farmName") ?: "", "UTF-8")
+            com.simats.poultrysuite.ui.customer.CustomerChatScreen(
+                navController = navController,
+                conversationId = conversationId,
+                farmName = farmName
+            )
         }
     }
 }

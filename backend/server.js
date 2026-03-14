@@ -702,6 +702,37 @@ app.patch('/farm/sale/:id/mark-paid', authenticateToken, async (req, res) => {
     }
 });
 
+// Mark Order as Complete (Farmer marks delivery done)
+app.patch('/farm/order/:id/complete', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+    const orderId = parseInt(req.params.id);
+    if (isNaN(orderId)) return res.status(400).json({ error: 'Invalid order ID' });
+    try {
+        const farm = await prisma.farm.findUnique({ where: { ownerId: req.user.id } });
+        if (!farm) return res.status(404).json({ error: 'Farm not found' });
+
+        // Verify this order belongs to the farmer's farm
+        const order = await prisma.order.findUnique({
+            where: { id: orderId },
+            include: { product: true }
+        });
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+        if (String(order.product.farmId) !== String(farm.id)) return res.sendStatus(403);
+
+        await prisma.order.update({
+            where: { id: orderId },
+            data: {
+                status: 'COMPLETED',
+                paymentStatus: 'Paid'
+            }
+        });
+        res.json({ message: 'Order marked as complete' });
+    } catch (e) {
+        console.error('Error marking order complete:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Add Expense
 app.post('/farm/expense', authenticateToken, async (req, res) => {
     if (req.user.role !== 'FARMER') return res.sendStatus(403);
@@ -889,7 +920,7 @@ app.get('/market/listings', async (req, res) => {
 
 // Place Order
 app.post('/market/order', authenticateToken, async (req, res) => {
-    const { productId } = req.body;
+    const { productId, purchaseType, deliveryAddress, quantity } = req.body;
     try {
         const pId = parseInt(productId, 10);
         const product = await prisma.productRequest.findUnique({
@@ -901,25 +932,59 @@ app.post('/market/order', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'Product not available' });
         }
 
+        const requestedQuantity = quantity == null
+            ? product.quantity
+            : parseInt(quantity, 10);
+
+        if (!Number.isInteger(requestedQuantity) || requestedQuantity <= 0) {
+            return res.status(400).json({ error: 'Invalid quantity selected' });
+        }
+
+        if (requestedQuantity > product.quantity) {
+            return res.status(400).json({ error: `Only ${product.quantity} available` });
+        }
+
         // Get customer name for the order record
         const customer = await prisma.user.findUnique({ where: { id: req.user.id } });
+        const mode = (typeof purchaseType === 'string' ? purchaseType : 'ONLINE').toUpperCase();
+        const isInStore = mode === 'IN_STORE';
+        const safeAddress = typeof deliveryAddress === 'string' ? deliveryAddress.trim() : '';
+        const modeTag = isInStore ? '[IN_STORE]' : '[ONLINE]';
+        const addressTag = !isInStore && safeAddress ? ` [ADDR]${safeAddress}` : '';
 
         // Transaction to update product status and create order
         const order = await prisma.$transaction(async (tx) => {
+            const remainingQuantity = product.quantity - requestedQuantity;
+
             await tx.productRequest.update({
                 where: { id: pId },
-                data: { status: 'SOLD' }
+                data: {
+                    quantity: requestedQuantity,
+                    status: 'SOLD'
+                }
             });
+
+            if (remainingQuantity > 0) {
+                await tx.productRequest.create({
+                    data: {
+                        farmId: product.farmId,
+                        type: product.type,
+                        quantity: remainingQuantity,
+                        pricePerUnit: product.pricePerUnit,
+                        status: 'AVAILABLE'
+                    }
+                });
+            }
 
             return await tx.order.create({
                 data: {
                     customerId: req.user.id,
                     productId: pId,
-                    totalPrice: product.pricePerUnit * product.quantity,
+                    totalPrice: product.pricePerUnit * requestedQuantity,
                     status: 'PENDING',
                     buyerName: customer?.name || 'Customer',
                     paymentStatus: 'Pending',
-                    notes: `Order for ${product.type}`
+                    notes: `${modeTag}${addressTag} Order for ${requestedQuantity} ${product.type}`.trim()
                 }
             });
         });
@@ -939,12 +1004,25 @@ app.get('/market/my-orders', authenticateToken, async (req, res) => {
             include: {
                 product: {
                     include: { farm: true }
-                }
+                },
+                review: true
             },
             orderBy: { createdAt: 'desc' }
         });
         console.log(`Found ${orders.length} orders for User ID: ${req.user.id}`);
-        res.json(orders);
+        res.json(orders.map(({ review, ...order }) => {
+            const notes = order.notes || '';
+            const isInStore = /\[IN_STORE\]|in-store|in store|pickup/i.test(notes);
+            const addrMatch = notes.match(/\[ADDR\]([^\[]+)/i);
+            const parsedAddress = addrMatch?.[1]?.trim() || null;
+
+            return {
+                ...order,
+                purchaseType: isInStore ? 'IN_STORE' : 'ONLINE',
+                deliveryAddress: isInStore ? null : parsedAddress,
+                isReviewed: review !== null
+            };
+        }));
     } catch (e) {
         console.error('Error fetching orders:', e);
         res.status(500).json({ error: e.message });
@@ -1042,24 +1120,24 @@ app.get('/admin/farm/:id', async (req, res) => {
     }
 });
 app.get('/admin/stats', async (req, res) => {
-    // In a real app, add middleware: authenticateToken, verifyAdminRole
     try {
+        const formatPercent = (current, previous) => {
+            if (previous === 0) return current > 0 ? '+100%' : '0%';
+            const value = (((current - previous) / previous) * 100).toFixed(0);
+            return `${Number(value) >= 0 ? '+' : ''}${value}%`;
+        };
+
         const usersCount = await prisma.user.count();
         const farmsCount = await prisma.farm.count();
         const ordersCount = await prisma.order.count();
 
-        // Calculate Total Sales (Sum of totalPrice for completed orders - simplified to all orders for now or status='COMPLETED')
         const salesAgg = await prisma.order.aggregate({
-            _sum: {
-                totalPrice: true
-            }
+            _sum: { totalPrice: true }
         });
         const totalSales = salesAgg._sum.totalPrice || 0;
 
-        // Weekly Revenue Logic (merged from /admin/sales to feed the dashboard chart)
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const weeklyRevenue = [];
         const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const revenueLabels = [];
         const revenueData = [];
@@ -1081,53 +1159,48 @@ app.get('/admin/stats', async (req, res) => {
                 }
             });
 
-            const dailyTotal = dailyOrders.reduce((sum, order) => sum + order.totalPrice, 0);
             revenueLabels.push(days[date.getDay()]);
-            revenueData.push(dailyTotal);
+            revenueData.push(dailyOrders.reduce((sum, order) => sum + order.totalPrice, 0));
         }
 
-        // Pending Approvals
         const pendingOrders = await prisma.order.count({ where: { status: 'PENDING' } });
 
-        // User Growth Data (Last 7 Days)
         const userGrowthLabels = [];
         const userGrowthData = [];
         const userGrowthDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-        const todayStart = new Date(today); // Re-use today obj which is start of day
-
         let usersLast7Days = 0;
+
         for (let i = 6; i >= 0; i--) {
-            const date = new Date(todayStart);
-            date.setDate(todayStart.getDate() - i);
+            const date = new Date(today);
+            date.setDate(today.getDate() - i);
             const start = new Date(date);
+            start.setHours(0, 0, 0, 0);
             const end = new Date(date);
             end.setHours(23, 59, 59, 999);
 
             const dailyUsers = await prisma.user.count({
                 where: { createdAt: { gte: start, lte: end } }
             });
+
             userGrowthLabels.push(userGrowthDays[date.getDay()]);
             userGrowthData.push(dailyUsers);
             usersLast7Days += dailyUsers;
         }
 
-        // Calculate Percentages
-        const prev7Start = new Date(todayStart);
+        const prev7Start = new Date(today);
         prev7Start.setDate(prev7Start.getDate() - 14);
-        const prev7End = new Date(todayStart);
+        const prev7End = new Date(today);
         prev7End.setDate(prev7End.getDate() - 7);
         prev7End.setHours(23, 59, 59, 999);
-        const usersPrev7Days = await prisma.user.count({ where: { createdAt: { gte: prev7Start, lte: prev7End } } });
+        const usersPrev7Days = await prisma.user.count({
+            where: { createdAt: { gte: prev7Start, lte: prev7End } }
+        });
+        const usersPercent = formatPercent(usersLast7Days, usersPrev7Days);
 
-        let usersPercentRaw = usersPrev7Days === 0 ? "100" : (((usersLast7Days - usersPrev7Days) / usersPrev7Days) * 100).toFixed(0);
-        const usersPercent = (usersPercentRaw >= 0 ? "+" + usersPercentRaw : usersPercentRaw) + "%";
+        const highRiskUsers = await prisma.user.count({ where: { status: 'SUSPENDED' } });
+        const highRiskPercent = '0%';
 
-        const highRiskUsers = await prisma.user.count({ where: { status: 'SUSPENDED' } }) || 0;
-        const highRiskPercent = "0%";
-
-        // Active Now: Distinct users interacting in the last 7 days
-        const sevenDaysAgo = new Date(todayStart);
+        const sevenDaysAgo = new Date(today);
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
         const recentOrders = await prisma.order.findMany({
             where: { createdAt: { gte: sevenDaysAgo } },
@@ -1138,36 +1211,61 @@ app.get('/admin/stats', async (req, res) => {
             where: { createdAt: { gte: sevenDaysAgo } },
             include: { farm: true }
         });
-        recentListings.forEach(l => {
-            if (l.farm && l.farm.ownerId) activeNowSet.add(l.farm.ownerId);
+        recentListings.forEach(listing => {
+            if (listing.farm?.ownerId) {
+                activeNowSet.add(listing.farm.ownerId);
+            }
         });
-        const activeNow = activeNowSet.size + 1; // Base active
-        const activePercent = "+5%";
+        const activeNow = activeNowSet.size;
 
-        // Logs Today
-        const endOfTodayObj = new Date(todayStart);
-        endOfTodayObj.setHours(23, 59, 59, 999);
-        const ordersTodayCount = await prisma.order.count({ where: { createdAt: { gte: todayStart, lte: endOfTodayObj } } });
-        const listingsTodayCount = await prisma.productRequest.count({ where: { createdAt: { gte: todayStart, lte: endOfTodayObj } } });
-        const logsCount = ordersTodayCount + listingsTodayCount;
-        const logsToday = logsCount >= 1000 ? (logsCount / 1000).toFixed(1) + "k" : logsCount.toString();
+        const previousActiveStart = new Date(today);
+        previousActiveStart.setDate(previousActiveStart.getDate() - 14);
+        const previousActiveEnd = new Date(today);
+        previousActiveEnd.setDate(previousActiveEnd.getDate() - 8);
+        previousActiveEnd.setHours(23, 59, 59, 999);
+        const previousOrders = await prisma.order.findMany({
+            where: { createdAt: { gte: previousActiveStart, lte: previousActiveEnd } },
+            select: { customerId: true }
+        });
+        const previousActiveSet = new Set(previousOrders.map(order => order.customerId));
+        const previousListings = await prisma.productRequest.findMany({
+            where: { createdAt: { gte: previousActiveStart, lte: previousActiveEnd } },
+            include: { farm: true }
+        });
+        previousListings.forEach(listing => {
+            if (listing.farm?.ownerId) {
+                previousActiveSet.add(listing.farm.ownerId);
+            }
+        });
+        const activePercent = formatPercent(activeNow, previousActiveSet.size);
 
-        const yesterdayStart = new Date(todayStart);
-        yesterdayStart.setDate(todayStart.getDate() - 1);
-        const yesterdayEnd = new Date(yesterdayStart);
-        yesterdayEnd.setHours(23, 59, 59, 999);
-        const ordersYest = await prisma.order.count({ where: { createdAt: { gte: yesterdayStart, lte: yesterdayEnd } } });
-        const listingsYest = await prisma.productRequest.count({ where: { createdAt: { gte: yesterdayStart, lte: yesterdayEnd } } });
-        const logsYest = ordersYest + listingsYest;
+        const tomorrowStart = new Date(today);
+        tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+        const ordersToday = await prisma.order.count({
+            where: { createdAt: { gte: today, lt: tomorrowStart } }
+        });
+        const listingsToday = await prisma.productRequest.count({
+            where: { createdAt: { gte: today, lt: tomorrowStart } }
+        });
+        const logsCount = ordersToday + listingsToday;
+        const logsToday = String(logsCount);
 
-        let logsPercentRaw = logsYest === 0 ? (logsCount > 0 ? 100 : 0) : (((logsCount - logsYest) / logsYest) * 100).toFixed(0);
-        const logsPercent = (logsPercentRaw >= 0 ? "+" + logsPercentRaw : logsPercentRaw) + "%";
+        const yesterdayStart = new Date(today);
+        yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+        const yesterdayEnd = new Date(today);
+        const ordersYesterday = await prisma.order.count({
+            where: { createdAt: { gte: yesterdayStart, lt: yesterdayEnd } }
+        });
+        const listingsYesterday = await prisma.productRequest.count({
+            where: { createdAt: { gte: yesterdayStart, lt: yesterdayEnd } }
+        });
+        const logsPercent = formatPercent(logsCount, ordersYesterday + listingsYesterday);
 
         res.json({
             users: usersCount,
             farms: farmsCount,
             orders: ordersCount,
-            totalSales: totalSales,
+            totalSales,
             pendingApprovals: pendingOrders,
             activeNow,
             highRiskUsers,
@@ -1576,6 +1674,319 @@ app.get('/admin/reports', async (req, res) => {
 
     } catch (e) {
         console.error(e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// --- REVIEW ROUTES ---
+
+// Submit a Review (Customer only, one review per order)
+app.post('/review', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'CUSTOMER') return res.sendStatus(403);
+    const { orderId, rating, comment } = req.body;
+
+    if (!orderId || !rating) {
+        return res.status(400).json({ error: 'orderId and rating are required' });
+    }
+    if (parseInt(rating) < 1 || parseInt(rating) > 5) {
+        return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+    }
+
+    try {
+        const order = await prisma.order.findUnique({
+            where: { id: parseInt(orderId) },
+            include: { product: true }
+        });
+
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+        if (order.customerId !== req.user.id) return res.status(403).json({ error: 'Not your order' });
+        if (order.status !== 'COMPLETED') return res.status(400).json({ error: 'Order not yet completed' });
+
+        const review = await prisma.review.create({
+            data: {
+                farmId: order.product.farmId,
+                customerId: req.user.id,
+                orderId: parseInt(orderId),
+                rating: parseInt(rating),
+                comment: comment || null
+            }
+        });
+
+        res.json({ message: 'Review submitted successfully', review });
+    } catch (e) {
+        if (e.code === 'P2002') {
+            return res.status(400).json({ error: 'You have already reviewed this order' });
+        }
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Get all reviews for a farm (public)
+app.get('/review/farm/:farmId', async (req, res) => {
+    try {
+        const reviews = await prisma.review.findMany({
+            where: { farmId: parseInt(req.params.farmId) },
+            include: { customer: { select: { name: true } } },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        res.json(reviews.map(r => ({
+            id: r.id.toString(),
+            rating: r.rating,
+            comment: r.comment,
+            customerName: r.customer.name || 'Anonymous',
+            createdAt: r.createdAt
+        })));
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Check if logged-in customer can review a farm (returns eligible orderId or null)
+app.get('/review/can-review/:farmId', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'CUSTOMER') return res.sendStatus(403);
+
+    try {
+        const completedOrders = await prisma.order.findMany({
+            where: {
+                customerId: req.user.id,
+                status: 'COMPLETED',
+                product: { farmId: parseInt(req.params.farmId) }
+            },
+            select: { id: true }
+        });
+
+        if (completedOrders.length === 0) {
+            return res.json({ canReview: false, orderId: null });
+        }
+
+        const orderIds = completedOrders.map(o => o.id);
+        const existingReviews = await prisma.review.findMany({
+            where: { orderId: { in: orderIds } },
+            select: { orderId: true }
+        });
+
+        const reviewedSet = new Set(existingReviews.map(r => r.orderId));
+        const unreviewed = completedOrders.find(o => !reviewedSet.has(o.id));
+
+        res.json({
+            canReview: !!unreviewed,
+            orderId: unreviewed ? unreviewed.id.toString() : null
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ─── Messaging Routes ────────────────────────────────────────────
+
+// GET /messages/conversations  — list all conversations for the logged-in user
+app.get('/messages/conversations', authenticateToken, async (req, res) => {
+    try {
+        const userId = parseInt(req.user.id);
+        const isCustomer = req.user.role === 'CUSTOMER';
+
+        let convos;
+        if (isCustomer) {
+            convos = await prisma.conversation.findMany({
+                where: { customerId: userId },
+                include: {
+                    farm: { select: { id: true, name: true } },
+                    messages: {
+                        orderBy: { createdAt: 'desc' },
+                        take: 1
+                    }
+                },
+                orderBy: { updatedAt: 'desc' }
+            });
+        } else {
+            // Farmer: find convos where farm.ownerId = userId
+            convos = await prisma.conversation.findMany({
+                where: { farm: { ownerId: userId } },
+                include: {
+                    customer: { select: { id: true, name: true } },
+                    messages: {
+                        orderBy: { createdAt: 'desc' },
+                        take: 1
+                    }
+                },
+                orderBy: { updatedAt: 'desc' }
+            });
+        }
+
+        const result = convos.map(c => {
+            const lastMsg = c.messages[0] || null;
+            const unreadCount = c.messages.filter(m => !m.isRead && m.senderId !== userId).length;
+            return {
+                id: c.id.toString(),
+                farmId: c.farmId.toString(),
+                farmName: isCustomer ? c.farm.name : `${c.customer?.name ?? 'Customer'}`,
+                otherPartyName: isCustomer ? c.farm.name : (c.customer?.name ?? 'Customer'),
+                lastMessage: lastMsg?.content ?? null,
+                lastMessageTime: lastMsg?.createdAt ?? null,
+                unreadCount: 0 // unread count computed below separately for accuracy
+            };
+        });
+
+        // Efficient per-conversation unread count
+        const convoIds = convos.map(c => c.id);
+        const unreadGroups = await prisma.message.groupBy({
+            by: ['conversationId'],
+            where: { conversationId: { in: convoIds }, isRead: false, NOT: { senderId: userId } },
+            _count: { id: true }
+        });
+        const unreadMap = {};
+        unreadGroups.forEach(g => { unreadMap[g.conversationId] = g._count.id; });
+        result.forEach(r => { r.unreadCount = unreadMap[parseInt(r.id)] || 0; });
+
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /messages/start/:farmId  — start or get conversation with a farm (customer only)
+app.post('/messages/start/:farmId', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'CUSTOMER') return res.status(403).json({ error: 'Customers only' });
+        const customerId = parseInt(req.user.id);
+        const farmId = parseInt(req.params.farmId);
+
+        const convo = await prisma.conversation.upsert({
+            where: { farmId_customerId: { farmId, customerId } },
+            update: {},
+            create: { farmId, customerId },
+            include: { farm: { select: { id: true, name: true } } }
+        });
+
+        res.json({ id: convo.id.toString(), farmId: convo.farmId.toString(), farmName: convo.farm.name });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /messages/start/order/:orderId  — start or get conversation from an order (farmer only)
+app.post('/messages/start/order/:orderId', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'FARMER') return res.status(403).json({ error: 'Farmers only' });
+
+        const farmerId = parseInt(req.user.id);
+        const orderId = parseInt(req.params.orderId);
+        if (Number.isNaN(orderId)) {
+            return res.status(400).json({ error: 'Invalid order id' });
+        }
+
+        const order = await prisma.order.findUnique({
+            where: { id: orderId },
+            include: {
+                customer: { select: { id: true, name: true, role: true } },
+                product: {
+                    select: {
+                        farmId: true,
+                        farm: { select: { ownerId: true } }
+                    }
+                }
+            }
+        });
+
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+        if (order.product.farm.ownerId !== farmerId) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        if (!order.customer || order.customer.role !== 'CUSTOMER') {
+            return res.status(400).json({ error: 'No customer chat available for this order' });
+        }
+
+        const convo = await prisma.conversation.upsert({
+            where: {
+                farmId_customerId: {
+                    farmId: order.product.farmId,
+                    customerId: order.customerId
+                }
+            },
+            update: { updatedAt: new Date() },
+            create: { farmId: order.product.farmId, customerId: order.customerId }
+        });
+
+        res.json({
+            id: convo.id.toString(),
+            partnerName: order.customer.name || order.buyerName || 'Customer'
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// GET /messages/:conversationId  — fetch messages in a conversation
+app.get('/messages/:conversationId', authenticateToken, async (req, res) => {
+    try {
+        const userId = parseInt(req.user.id);
+        const conversationId = parseInt(req.params.conversationId);
+
+        const convo = await prisma.conversation.findUnique({ where: { id: conversationId } });
+        if (!convo) return res.status(404).json({ error: 'Conversation not found' });
+
+        // Verify user is part of this conversation
+        const farm = await prisma.farm.findUnique({ where: { id: convo.farmId } });
+        const isMember = convo.customerId === userId || farm?.ownerId === userId;
+        if (!isMember) return res.status(403).json({ error: 'Access denied' });
+
+        // Mark messages from the other party as read
+        await prisma.message.updateMany({
+            where: { conversationId, isRead: false, NOT: { senderId: userId } },
+            data: { isRead: true }
+        });
+
+        const messages = await prisma.message.findMany({
+            where: { conversationId },
+            orderBy: { createdAt: 'asc' }
+        });
+
+        res.json(messages.map(m => ({
+            id: m.id.toString(),
+            content: m.content,
+            senderId: m.senderId.toString(),
+            isMine: m.senderId === userId,
+            isRead: m.isRead,
+            createdAt: m.createdAt
+        })));
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /messages/:conversationId  — send a message
+app.post('/messages/:conversationId', authenticateToken, async (req, res) => {
+    try {
+        const userId = parseInt(req.user.id);
+        const conversationId = parseInt(req.params.conversationId);
+        const { content } = req.body;
+        if (!content || !content.trim()) return res.status(400).json({ error: 'Message content required' });
+
+        const convo = await prisma.conversation.findUnique({ where: { id: conversationId } });
+        if (!convo) return res.status(404).json({ error: 'Conversation not found' });
+
+        const farm = await prisma.farm.findUnique({ where: { id: convo.farmId } });
+        const isMember = convo.customerId === userId || farm?.ownerId === userId;
+        if (!isMember) return res.status(403).json({ error: 'Access denied' });
+
+        const message = await prisma.message.create({
+            data: { conversationId, senderId: userId, content: content.trim() }
+        });
+
+        // Update conversation updatedAt
+        await prisma.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } });
+
+        res.json({
+            id: message.id.toString(),
+            content: message.content,
+            senderId: message.senderId.toString(),
+            isMine: true,
+            isRead: false,
+            createdAt: message.createdAt
+        });
+    } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });

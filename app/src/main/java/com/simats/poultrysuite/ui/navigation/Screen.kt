@@ -36,6 +36,11 @@ sealed class Screen(val route: String) {
     }
     object FarmerSales : Screen("farmer_sales")
     object FarmerCreateListing : Screen("farmer_create_listing")
+    object FarmerMessages : Screen("farmer_messages")
+    object FarmerChat : Screen("farmer_chat/{conversationId}/{partnerName}") {
+        fun createRoute(conversationId: String, partnerName: String) =
+            "farmer_chat/$conversationId/${java.net.URLEncoder.encode(partnerName, "UTF-8")}"
+    }
     object Analytics : Screen("analytics")
     object AddExpense : Screen("add_expense")
     object CustomerDashboard : Screen("customer_dashboard")
@@ -44,7 +49,20 @@ sealed class Screen(val route: String) {
     object CustomerProductDetails : Screen("customer_product_details/{productId}") {
         fun createRoute(productId: String) = "customer_product_details/$productId"
     }
+    object CustomerFarmProfile : Screen("customer_farm_profile/{farmId}") {
+        fun createRoute(farmId: String) = "customer_farm_profile/$farmId"
+    }
+    object CustomerOrderTracking : Screen("customer_order_tracking/{orderId}") {
+        fun createRoute(orderId: String) = "customer_order_tracking/$orderId"
+    }
+    object CustomerWriteReview : Screen("customer_write_review/{orderId}") {
+        fun createRoute(orderId: String) = "customer_write_review/$orderId"
+    }
     object CustomerOrderSuccess : Screen("customer_order_success")
     object CustomerAccount : Screen("customer_account")
     object CustomerEditProfile : Screen("customer_edit_profile")
+    object CustomerMessages : Screen("customer_messages")
+    object CustomerChat : Screen("customer_chat/{conversationId}/{farmName}") {
+        fun createRoute(conversationId: String, farmName: String) = "customer_chat/$conversationId/${java.net.URLEncoder.encode(farmName, "UTF-8")}"
+    }
 }

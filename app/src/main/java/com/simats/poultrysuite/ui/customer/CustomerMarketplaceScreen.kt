@@ -10,9 +10,11 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Chat
 import androidx.compose.material.icons.outlined.ListAlt
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Search
@@ -192,7 +194,7 @@ fun CustomerMarketplaceScreen(
                                     CustomerListingCard(
                                         item = item,
                                         colorIndex = s.listings.indexOf(item),
-                                        onBuy = { 
+                                        onOpenProduct = {
                                             navController.navigate(Screen.CustomerProductDetails.createRoute(item.id.toString())) 
                                         }
                                     )
@@ -210,7 +212,7 @@ fun CustomerMarketplaceScreen(
 fun CustomerListingCard(
     item: ProductRequest,
     colorIndex: Int,
-    onBuy: () -> Unit
+    onOpenProduct: () -> Unit
 ) {
     val bgColor = cardBgColors[colorIndex % cardBgColors.size]
     val emoji = when(item.type.lowercase().take(4)) {
@@ -226,7 +228,9 @@ fun CustomerListingCard(
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpenProduct),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(2.dp)
@@ -283,7 +287,7 @@ fun CustomerListingCard(
                 
                 Spacer(Modifier.height(12.dp))
                 Button(
-                    onClick = onBuy,
+                    onClick = onOpenProduct,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(36.dp),
@@ -359,6 +363,33 @@ fun CustomerBottomNavigation(navController: NavController) {
             )
         )
         
+        NavigationBarItem(
+            icon = {
+                Icon(
+                    if (currentRoute == Screen.CustomerMessages.route) Icons.Filled.Chat else Icons.Outlined.Chat,
+                    contentDescription = "Messages"
+                )
+            },
+            label = { Text("Messages", fontSize = 11.sp, fontWeight = if (currentRoute == Screen.CustomerMessages.route) FontWeight.Bold else FontWeight.Normal) },
+            selected = currentRoute == Screen.CustomerMessages.route,
+            onClick = {
+                if (currentRoute != Screen.CustomerMessages.route) {
+                    navController.navigate(Screen.CustomerMessages.route) {
+                        popUpTo(Screen.CustomerDashboard.route) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = Color(0xFF1565C0),
+                selectedTextColor = Color(0xFF1565C0),
+                unselectedIconColor = Color(0xFF94A3B8),
+                unselectedTextColor = Color(0xFF94A3B8),
+                indicatorColor = Color.Transparent
+            )
+        )
+
         NavigationBarItem(
             icon = { 
                 Icon(

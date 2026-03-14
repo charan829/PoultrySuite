@@ -97,19 +97,36 @@ fun DashboardScreen(
                         )
                     }
                     
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .background(Color.White, RoundedCornerShape(14.dp))
-                            .clickable { navController.navigate(Screen.FarmerSettings.route) },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = Color(0xFF64748B),
-                            modifier = Modifier.size(24.dp)
-                        )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(Color.White, RoundedCornerShape(14.dp))
+                                .clickable { navController.navigate(Screen.FarmerMessages.route) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ChatBubbleOutline,
+                                contentDescription = "Messages",
+                                tint = Color(0xFF64748B),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(Color.White, RoundedCornerShape(14.dp))
+                                .clickable { navController.navigate(Screen.FarmerSettings.route) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = Color(0xFF64748B),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(32.dp))
