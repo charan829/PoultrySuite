@@ -21,17 +21,12 @@ import androidx.navigation.NavController
 import com.simats.poultrysuite.ui.customer.CustomerBottomNavigation
 import com.simats.poultrysuite.ui.navigation.Screen
 
-import android.widget.Toast
-import androidx.compose.ui.platform.LocalContext
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CustomerProfileScreen(
     navController: NavController,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
-    val context = LocalContext.current
-    
     LaunchedEffect(Unit) {
         viewModel.logoutEvent.collect {
             navController.navigate(com.simats.poultrysuite.ui.navigation.Screen.Login.route) {
@@ -82,7 +77,7 @@ fun CustomerProfileScreen(
                         iconTint = Color(0xFFFF9800),
                         title = "Notifications",
                         subtitle = "Configure alert preferences",
-                        onClick = { Toast.makeText(context, "Feature coming soon", Toast.LENGTH_SHORT).show() }
+                        onClick = { navController.navigate(Screen.CustomerNotifications.route) }
                     )
                     HorizontalDivider(color = Color(0xFFF1F5F9), modifier = Modifier.padding(horizontal = 16.dp))
                     SettingsItem(
@@ -91,7 +86,7 @@ fun CustomerProfileScreen(
                         iconTint = Color(0xFF2E7D32),
                         title = "Security",
                         subtitle = "Password and 2FA settings",
-                        onClick = { Toast.makeText(context, "Feature coming soon", Toast.LENGTH_SHORT).show() }
+                        onClick = { navController.navigate(Screen.CustomerSecurity.route) }
                     )
                     HorizontalDivider(color = Color(0xFFF1F5F9), modifier = Modifier.padding(horizontal = 16.dp))
                     SettingsItem(

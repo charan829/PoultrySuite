@@ -14,6 +14,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
+import com.simats.poultrysuite.ui.auth.ForgotPasswordScreen
 import com.simats.poultrysuite.ui.auth.LoginScreen
 import com.simats.poultrysuite.ui.navigation.Screen
 import com.simats.poultrysuite.ui.user.ActiveUsersScreen
@@ -51,6 +52,9 @@ fun AppNavigation() {
         composable(com.simats.poultrysuite.ui.navigation.Screen.Register.route) {
             com.simats.poultrysuite.ui.auth.RegisterScreen(navController = navController)
         }
+        composable(com.simats.poultrysuite.ui.navigation.Screen.ForgotPassword.route) {
+            ForgotPasswordScreen(navController = navController)
+        }
         composable(com.simats.poultrysuite.ui.navigation.Screen.Dashboard.route) {
             com.simats.poultrysuite.ui.dashboard.DashboardScreen(navController = navController)
         }
@@ -82,6 +86,15 @@ fun AppNavigation() {
         composable(com.simats.poultrysuite.ui.navigation.Screen.AdminSettings.route) {
             com.simats.poultrysuite.ui.admin.AdminSettingsScreen(navController = navController)
         }
+        composable(com.simats.poultrysuite.ui.navigation.Screen.AdminNotifications.route) {
+            com.simats.poultrysuite.ui.user.NotificationsScreen(navController = navController)
+        }
+        composable(com.simats.poultrysuite.ui.navigation.Screen.AdminSecurity.route) {
+            com.simats.poultrysuite.ui.user.SecurityScreen(
+                navController = navController,
+                onChangePasswordClick = { navController.navigate(com.simats.poultrysuite.ui.navigation.Screen.AdminChangePassword.route) }
+            )
+        }
         composable(com.simats.poultrysuite.ui.navigation.Screen.AdminEditProfile.route) {
             com.simats.poultrysuite.ui.admin.AdminEditProfileScreen(navController = navController)
         }
@@ -97,6 +110,12 @@ fun AppNavigation() {
         }
         composable(com.simats.poultrysuite.ui.navigation.Screen.FarmerSettings.route) {
             com.simats.poultrysuite.ui.user.FarmerSettingsScreen(navController = navController)
+        }
+        composable(com.simats.poultrysuite.ui.navigation.Screen.FarmerNotifications.route) {
+            com.simats.poultrysuite.ui.user.NotificationsScreen(navController = navController)
+        }
+        composable(com.simats.poultrysuite.ui.navigation.Screen.FarmerSecurity.route) {
+            com.simats.poultrysuite.ui.user.SecurityScreen(navController = navController)
         }
         composable(com.simats.poultrysuite.ui.navigation.Screen.FarmerAccount.route) {
             com.simats.poultrysuite.ui.user.FarmerAccountScreen(navController = navController)
@@ -188,6 +207,12 @@ fun AppNavigation() {
         }
         composable(com.simats.poultrysuite.ui.navigation.Screen.CustomerProfile.route) {
             com.simats.poultrysuite.ui.profile.CustomerProfileScreen(navController = navController)
+        }
+        composable(com.simats.poultrysuite.ui.navigation.Screen.CustomerNotifications.route) {
+            com.simats.poultrysuite.ui.user.NotificationsScreen(navController = navController)
+        }
+        composable(com.simats.poultrysuite.ui.navigation.Screen.CustomerSecurity.route) {
+            com.simats.poultrysuite.ui.user.SecurityScreen(navController = navController)
         }
         composable(
             route = com.simats.poultrysuite.ui.navigation.Screen.CustomerProductDetails.route,

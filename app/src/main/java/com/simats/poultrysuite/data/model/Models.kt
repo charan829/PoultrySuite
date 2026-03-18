@@ -370,6 +370,8 @@ data class LoginRequest(val email: String, val password: String)
 data class LoginResponse(val token: String, val role: String, val userId: String, val name: String?)
 data class RegisterRequest(val name: String, val email: String, val password: String, val role: String, val phone: String)
 data class RegisterResponse(val message: String, val userId: String)
+data class ForgotPasswordRequest(val email: String, val newPassword: String)
+data class ForgotPasswordResponse(val message: String)
 
 // ─── Messaging ────────────────────────────────────────────────────
 

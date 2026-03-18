@@ -64,11 +64,15 @@ const seedAdminUser = async () => {
 
 app.post('/auth/register', async (req, res) => {
     const { email, password, role, name, phone } = req.body;
+    const safeEmail = (email || '').toString().trim().toLowerCase();
+    if (!safeEmail || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+    }
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
         const user = await prisma.user.create({
             data: {
-                email,
+                email: safeEmail,
                 password: hashedPassword,
                 role: role || 'FARMER',
                 name: name || '',
@@ -96,8 +100,12 @@ app.post('/auth/register', async (req, res) => {
 
 app.post('/auth/login', async (req, res) => {
     const { email, password } = req.body;
+    const safeEmail = (email || '').toString().trim().toLowerCase();
+    if (!safeEmail || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+    }
     try {
-        const user = await prisma.user.findUnique({ where: { email } });
+        const user = await prisma.user.findUnique({ where: { email: safeEmail } });
         if (!user) return res.status(400).json({ error: 'User not found' });
 
         if (await bcrypt.compare(password, user.password)) {
@@ -107,6 +115,38 @@ app.post('/auth/login', async (req, res) => {
             res.status(401).json({ error: 'Invalid password' });
         }
     } catch (error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.post('/auth/forgot-password', async (req, res) => {
+    const { email, newPassword, password } = req.body;
+    const resetPassword = (newPassword || password || '').toString();
+    const safeEmail = (email || '').toString().trim().toLowerCase();
+
+    if (!safeEmail || !resetPassword) {
+        return res.status(400).json({ error: 'Email and new password are required' });
+    }
+
+    if (resetPassword.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    try {
+        const user = await prisma.user.findUnique({ where: { email: safeEmail } });
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const hashedPassword = await bcrypt.hash(resetPassword, 10);
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { password: hashedPassword }
+        });
+
+        res.json({ message: 'Password reset successful. Please login with your new password.' });
+    } catch (error) {
+        console.error('Forgot password error:', error.message);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

@@ -143,7 +143,7 @@ fun LoginScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.clickable {
-                    Toast.makeText(context, "Forgot Password feature coming soon", Toast.LENGTH_SHORT).show()
+                    navController.navigate(Screen.ForgotPassword.route)
                 }
             )
 

@@ -116,14 +116,15 @@ fun AdminSettingsScreen(
                 Spacer(modifier = Modifier.height(32.dp))
             }
             
-            // Security Section
+            // Preferences Section
             item {
-                SectionTitle("Security")
+                SectionTitle("Preferences")
                 SettingBlock(
-                    items = listOf("Change Password"),
+                    items = listOf("Notifications", "Security"),
                     onClick = { item ->
-                        if (item == "Change Password") {
-                            navController.navigate("admin_change_password")
+                        when (item) {
+                            "Notifications" -> navController.navigate(Screen.AdminNotifications.route)
+                            "Security" -> navController.navigate(Screen.AdminSecurity.route)
                         }
                     }
                 )

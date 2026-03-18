@@ -3,6 +3,7 @@ package com.simats.poultrysuite.ui.navigation
 sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Register : Screen("register")
+    object ForgotPassword : Screen("forgot_password")
     object Dashboard : Screen("dashboard")
     object Marketplace : Screen("marketplace")
     object Admin : Screen("admin")
@@ -25,8 +26,12 @@ sealed class Screen(val route: String) {
     object Splash : Screen("splash")
     object AdminChangeEmail : Screen("admin_change_email")
     object AdminChangePassword : Screen("admin_change_password")
+    object AdminNotifications : Screen("admin_notifications")
+    object AdminSecurity : Screen("admin_security")
     object FarmerSettings : Screen("farmer_settings")
     object FarmerAccount : Screen("farmer_account")
+    object FarmerNotifications : Screen("farmer_notifications")
+    object FarmerSecurity : Screen("farmer_security")
     object FarmerEditProfile : Screen("farmer_edit_profile")
     object FarmerAddSale : Screen("farmer_add_sale")
     object FarmerInventory : Screen("farmer_inventory")
@@ -46,6 +51,8 @@ sealed class Screen(val route: String) {
     object CustomerDashboard : Screen("customer_dashboard")
     object CustomerOrders : Screen("customer_orders")
     object CustomerProfile : Screen("customer_profile")
+    object CustomerNotifications : Screen("customer_notifications")
+    object CustomerSecurity : Screen("customer_security")
     object CustomerProductDetails : Screen("customer_product_details/{productId}") {
         fun createRoute(productId: String) = "customer_product_details/$productId"
     }

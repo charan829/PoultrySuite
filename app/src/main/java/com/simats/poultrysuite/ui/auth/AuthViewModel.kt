@@ -38,6 +38,9 @@ class AuthViewModel @Inject constructor(
     private val _registerState = MutableStateFlow<LoginState>(LoginState.Idle)
     val registerState = _registerState.asStateFlow()
 
+    private val _forgotPasswordState = MutableStateFlow<ForgotPasswordState>(ForgotPasswordState.Idle)
+    val forgotPasswordState = _forgotPasswordState.asStateFlow()
+
     fun register(name: String, email: String, pass: String, phone: String, role: String) {
         _registerState.value = LoginState.Loading
         viewModelScope.launch {
@@ -51,6 +54,26 @@ class AuthViewModel @Inject constructor(
             }
         }
     }
+
+    fun forgotPassword(email: String, newPassword: String) {
+        _forgotPasswordState.value = ForgotPasswordState.Loading
+        viewModelScope.launch {
+            val result = repository.forgotPassword(email = email, newPassword = newPassword)
+            if (result.isSuccess) {
+                _forgotPasswordState.value = ForgotPasswordState.Success(
+                    result.getOrNull() ?: "Password reset successful"
+                )
+            } else {
+                _forgotPasswordState.value = ForgotPasswordState.Error(
+                    result.exceptionOrNull()?.message ?: "Failed to reset password"
+                )
+            }
+        }
+    }
+
+    fun resetForgotPasswordState() {
+        _forgotPasswordState.value = ForgotPasswordState.Idle
+    }
 }
 
 sealed class LoginState {
@@ -58,4 +81,11 @@ sealed class LoginState {
     object Loading : LoginState()
     data class Success(val role: String) : LoginState()
     data class Error(val message: String) : LoginState()
+}
+
+sealed class ForgotPasswordState {
+    object Idle : ForgotPasswordState()
+    object Loading : ForgotPasswordState()
+    data class Success(val message: String) : ForgotPasswordState()
+    data class Error(val message: String) : ForgotPasswordState()
 }

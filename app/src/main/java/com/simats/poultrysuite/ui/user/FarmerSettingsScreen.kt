@@ -85,7 +85,7 @@ fun FarmerSettingsScreen(
                             iconBg = Color(0xFFFFF8E1),
                             title = "Notifications",
                             subtitle = "Configure alert preferences",
-                            onClick = { /* Handle Click */ }
+                            onClick = { navController.navigate(Screen.FarmerNotifications.route) }
                         )
                         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF1F5F9))
                         
@@ -95,17 +95,7 @@ fun FarmerSettingsScreen(
                             iconBg = Color(0xFFE8F5E9),
                             title = "Security",
                             subtitle = "Password and 2FA settings",
-                            onClick = { /* Handle Click */ }
-                        )
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF1F5F9))
-
-                        FarmerSettingBlock(
-                            icon = Icons.Default.Psychology, // Brain icon
-                            iconTint = Color(0xFF9C27B0), // Purple
-                            iconBg = Color(0xFFF3E5F5),
-                            title = "AI Insights",
-                            subtitle = "Smart farm recommendations",
-                            onClick = { /* Handle Click */ }
+                            onClick = { navController.navigate(Screen.FarmerSecurity.route) }
                         )
                         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF1F5F9))
 
