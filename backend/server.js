@@ -151,6 +151,49 @@ app.post('/auth/forgot-password', async (req, res) => {
     }
 });
 
+app.post('/auth/change-password', authenticateToken, async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    const safeCurrent = (currentPassword || '').toString();
+    const safeNew = (newPassword || '').toString();
+
+    if (!safeCurrent || !safeNew) {
+        return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+
+    if (safeNew.length < 5) {
+        return res.status(400).json({ error: 'New password must be at least 5 characters' });
+    }
+
+    try {
+        const userId = parseInt(req.user.id);
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const isCurrentValid = await bcrypt.compare(safeCurrent, user.password);
+        if (!isCurrentValid) {
+            return res.status(400).json({ error: 'Current password is invalid' });
+        }
+
+        const isSamePassword = await bcrypt.compare(safeNew, user.password);
+        if (isSamePassword) {
+            return res.status(400).json({ error: 'New password must be different from current password' });
+        }
+
+        const hashedPassword = await bcrypt.hash(safeNew, 10);
+        await prisma.user.update({
+            where: { id: userId },
+            data: { password: hashedPassword }
+        });
+
+        res.json({ message: 'Password updated successfully' });
+    } catch (error) {
+        console.error('Change password error:', error.message);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Get current user details
 app.get('/auth/me', authenticateToken, async (req, res) => {
     console.log(`[/auth/me] Fetching profile for userId: ${req.user.id}`);

@@ -36,6 +36,9 @@ interface PoultryApi {
 
     @POST("auth/forgot-password")
     suspend fun forgotPassword(@Body request: com.simats.poultrysuite.data.model.ForgotPasswordRequest): retrofit2.Response<com.simats.poultrysuite.data.model.ForgotPasswordResponse>
+
+    @POST("auth/change-password")
+    suspend fun changePassword(@Body request: com.simats.poultrysuite.data.model.ChangePasswordRequest): retrofit2.Response<com.simats.poultrysuite.data.model.ChangePasswordResponse>
     
     @GET("farm/dashboard")
     suspend fun getDashboard(): Farm

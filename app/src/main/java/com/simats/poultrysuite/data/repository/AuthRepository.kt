@@ -1,6 +1,7 @@
 package com.simats.poultrysuite.data.repository
 
 import com.simats.poultrysuite.data.local.SessionManager
+import com.simats.poultrysuite.data.model.ChangePasswordRequest
 import com.simats.poultrysuite.data.model.ForgotPasswordRequest
 import com.simats.poultrysuite.data.remote.PoultryApi
 import org.json.JSONObject
@@ -49,6 +50,26 @@ class AuthRepository @Inject constructor(
             } else {
                 val body = response.errorBody()?.string()
                 val message = parseErrorMessage(body) ?: "Failed to reset password"
+                Result.failure(Exception(message))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun changePassword(currentPassword: String, newPassword: String): Result<String> {
+        return try {
+            val response = api.changePassword(
+                ChangePasswordRequest(
+                    currentPassword = currentPassword,
+                    newPassword = newPassword
+                )
+            )
+            if (response.isSuccessful) {
+                Result.success(response.body()?.message ?: "Password updated successfully")
+            } else {
+                val body = response.errorBody()?.string()
+                val message = parseErrorMessage(body) ?: "Failed to change password"
                 Result.failure(Exception(message))
             }
         } catch (e: Exception) {

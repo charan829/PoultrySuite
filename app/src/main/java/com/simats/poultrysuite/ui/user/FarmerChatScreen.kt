@@ -314,12 +314,31 @@ private fun FarmerChatBubble(message: ChatMessage) {
             )
         }
         Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = formatChatTime(message.createdAt),
-            fontSize = 10.sp,
-            color = Color(0xFF94A3B8),
-            modifier = Modifier.padding(horizontal = 4.dp)
-        )
+        if (message.isMine) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            ) {
+                Text(
+                    text = formatChatTime(message.createdAt),
+                    fontSize = 10.sp,
+                    color = Color(0xFF94A3B8)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = if (message.isRead) "Seen" else "Sent",
+                    fontSize = 10.sp,
+                    color = if (message.isRead) Color(0xFF2563EB) else Color(0xFF94A3B8)
+                )
+            }
+        } else {
+            Text(
+                text = formatChatTime(message.createdAt),
+                fontSize = 10.sp,
+                color = Color(0xFF94A3B8),
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+        }
     }
 }
 
