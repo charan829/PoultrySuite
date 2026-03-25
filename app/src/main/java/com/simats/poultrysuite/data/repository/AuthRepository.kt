@@ -2,7 +2,8 @@ package com.simats.poultrysuite.data.repository
 
 import com.simats.poultrysuite.data.local.SessionManager
 import com.simats.poultrysuite.data.model.ChangePasswordRequest
-import com.simats.poultrysuite.data.model.ForgotPasswordRequest
+import com.simats.poultrysuite.data.model.ForgotPasswordOtpRequest
+import com.simats.poultrysuite.data.model.ForgotPasswordOtpVerifyRequest
 import com.simats.poultrysuite.data.remote.PoultryApi
 import org.json.JSONObject
 import javax.inject.Inject
@@ -37,11 +38,29 @@ class AuthRepository @Inject constructor(
         }
     }
 
-    suspend fun forgotPassword(email: String, newPassword: String): Result<String> {
+    suspend fun requestForgotPasswordOtp(email: String): Result<String> {
         return try {
-            val response = api.forgotPassword(
-                ForgotPasswordRequest(
+            val response = api.requestForgotPasswordOtp(
+                ForgotPasswordOtpRequest(email = email.trim().lowercase())
+            )
+            if (response.isSuccessful) {
+                Result.success(response.body()?.message ?: "OTP sent successfully")
+            } else {
+                val body = response.errorBody()?.string()
+                val message = parseErrorMessage(body) ?: "Failed to send OTP"
+                Result.failure(Exception(message))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun verifyForgotPasswordOtp(email: String, otp: String, newPassword: String): Result<String> {
+        return try {
+            val response = api.verifyForgotPasswordOtp(
+                ForgotPasswordOtpVerifyRequest(
                     email = email.trim().lowercase(),
+                    otp = otp.trim(),
                     newPassword = newPassword
                 )
             )
@@ -49,7 +68,7 @@ class AuthRepository @Inject constructor(
                 Result.success(response.body()?.message ?: "Password reset successful")
             } else {
                 val body = response.errorBody()?.string()
-                val message = parseErrorMessage(body) ?: "Failed to reset password"
+                val message = parseErrorMessage(body) ?: "Failed to verify OTP"
                 Result.failure(Exception(message))
             }
         } catch (e: Exception) {

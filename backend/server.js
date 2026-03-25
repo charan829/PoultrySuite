@@ -1,14 +1,64 @@
 
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key';
+const OTP_TTL_MS = 10 * 60 * 1000;
+const forgotPasswordOtpStore = new Map();
+
+const smtpHost = process.env.SMTP_HOST;
+const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
+const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
+const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+const smtpFrom = process.env.SMTP_FROM || smtpUser || 'no-reply@poultrysuite.local';
+
+const transporter = (smtpUser && smtpPass)
+    ? nodemailer.createTransport(
+        smtpHost
+            ? {
+                host: smtpHost,
+                port: smtpPort,
+                secure: smtpPort === 465,
+                auth: { user: smtpUser, pass: smtpPass }
+            }
+            : {
+                service: 'gmail',
+                auth: { user: smtpUser, pass: smtpPass }
+            }
+    )
+    : null;
+
+if (!transporter) {
+    console.warn('SMTP not configured. OTP emails will not be delivered; OTP will be logged in backend console.');
+}
+
+const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+const sendForgotPasswordOtp = async (email, otp) => {
+    if (!transporter) {
+        console.log(`[OTP DEV MODE] ${email} -> ${otp}`);
+        return false;
+    }
+
+    await transporter.sendMail({
+        from: smtpFrom,
+        to: email,
+        subject: 'PoultrySuite Password Reset OTP',
+        text: `Your PoultrySuite OTP is ${otp}. It expires in 10 minutes.`,
+        html: `<p>Your PoultrySuite OTP is <b>${otp}</b>.</p><p>It expires in 10 minutes.</p>`
+    });
+
+    return true;
+};
 
 app.use(cors());
 app.use(express.json());
@@ -119,17 +169,12 @@ app.post('/auth/login', async (req, res) => {
     }
 });
 
-app.post('/auth/forgot-password', async (req, res) => {
-    const { email, newPassword, password } = req.body;
-    const resetPassword = (newPassword || password || '').toString();
+app.post('/auth/forgot-password/request-otp', async (req, res) => {
+    const { email } = req.body;
     const safeEmail = (email || '').toString().trim().toLowerCase();
 
-    if (!safeEmail || !resetPassword) {
-        return res.status(400).json({ error: 'Email and new password are required' });
-    }
-
-    if (resetPassword.length < 6) {
-        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    if (!safeEmail) {
+        return res.status(400).json({ error: 'Email is required' });
     }
 
     try {
@@ -138,17 +183,74 @@ app.post('/auth/forgot-password', async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        const hashedPassword = await bcrypt.hash(resetPassword, 10);
+        const otp = generateOtp();
+        forgotPasswordOtpStore.set(safeEmail, {
+            otp,
+            expiresAt: Date.now() + OTP_TTL_MS
+        });
+
+        const delivered = await sendForgotPasswordOtp(safeEmail, otp);
+        if (delivered) {
+            return res.json({ message: 'OTP sent to your email' });
+        }
+
+        return res.json({ message: 'OTP generated. Email service not configured; check backend logs.' });
+    } catch (error) {
+        console.error('Forgot password OTP request error:', error.message);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.post('/auth/forgot-password/verify-otp', async (req, res) => {
+    const { email, otp, newPassword } = req.body;
+    const safeEmail = (email || '').toString().trim().toLowerCase();
+    const safeOtp = (otp || '').toString().trim();
+    const safePassword = (newPassword || '').toString();
+
+    if (!safeEmail || !safeOtp || !safePassword) {
+        return res.status(400).json({ error: 'Email, OTP and new password are required' });
+    }
+
+    if (safePassword.length < 5) {
+        return res.status(400).json({ error: 'Password must be at least 5 characters' });
+    }
+
+    try {
+        const user = await prisma.user.findUnique({ where: { email: safeEmail } });
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const entry = forgotPasswordOtpStore.get(safeEmail);
+        if (!entry) {
+            return res.status(400).json({ error: 'OTP not found. Please request a new OTP.' });
+        }
+
+        if (Date.now() > entry.expiresAt) {
+            forgotPasswordOtpStore.delete(safeEmail);
+            return res.status(400).json({ error: 'OTP expired. Please request a new OTP.' });
+        }
+
+        if (entry.otp !== safeOtp) {
+            return res.status(400).json({ error: 'Invalid OTP' });
+        }
+
+        const hashedPassword = await bcrypt.hash(safePassword, 10);
         await prisma.user.update({
             where: { id: user.id },
             data: { password: hashedPassword }
         });
 
+        forgotPasswordOtpStore.delete(safeEmail);
         res.json({ message: 'Password reset successful. Please login with your new password.' });
     } catch (error) {
-        console.error('Forgot password error:', error.message);
+        console.error('Forgot password OTP verify error:', error.message);
         res.status(500).json({ error: 'Internal server error' });
     }
+});
+
+app.post('/auth/forgot-password', async (_req, res) => {
+    return res.status(400).json({ error: 'Use OTP flow: request-otp then verify-otp' });
 });
 
 app.post('/auth/change-password', authenticateToken, async (req, res) => {

@@ -5,6 +5,8 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("app-alt-build"))
+
 android {
     namespace = "com.simats.poultrysuite"
     compileSdk = 34
@@ -22,8 +24,18 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("release.keystore")
+            storePassword = "poultrysuite"
+            keyAlias = "upload"
+            keyPassword = "poultrysuite"
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

@@ -34,8 +34,11 @@ interface PoultryApi {
     @POST("auth/register")
     suspend fun register(@Body request: com.simats.poultrysuite.data.model.RegisterRequest): com.simats.poultrysuite.data.model.RegisterResponse
 
-    @POST("auth/forgot-password")
-    suspend fun forgotPassword(@Body request: com.simats.poultrysuite.data.model.ForgotPasswordRequest): retrofit2.Response<com.simats.poultrysuite.data.model.ForgotPasswordResponse>
+    @POST("auth/forgot-password/request-otp")
+    suspend fun requestForgotPasswordOtp(@Body request: com.simats.poultrysuite.data.model.ForgotPasswordOtpRequest): retrofit2.Response<com.simats.poultrysuite.data.model.ForgotPasswordResponse>
+
+    @POST("auth/forgot-password/verify-otp")
+    suspend fun verifyForgotPasswordOtp(@Body request: com.simats.poultrysuite.data.model.ForgotPasswordOtpVerifyRequest): retrofit2.Response<com.simats.poultrysuite.data.model.ForgotPasswordResponse>
 
     @POST("auth/change-password")
     suspend fun changePassword(@Body request: com.simats.poultrysuite.data.model.ChangePasswordRequest): retrofit2.Response<com.simats.poultrysuite.data.model.ChangePasswordResponse>

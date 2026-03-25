@@ -30,6 +30,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.simats.poultrysuite.data.model.ChatMessage
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlinx.coroutines.delay
@@ -315,8 +318,8 @@ private fun ChatBubble(message: ChatMessage) {
 
 private fun formatChatTime(iso: String): String {
     return try {
-        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
-        val date = sdf.parse(iso) ?: return ""
-        SimpleDateFormat("h:mm a", Locale.getDefault()).format(date)
+        val formatter = DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault())
+            .withZone(ZoneId.systemDefault())
+        formatter.format(Instant.parse(iso))
     } catch (e: Exception) { "" }
 }

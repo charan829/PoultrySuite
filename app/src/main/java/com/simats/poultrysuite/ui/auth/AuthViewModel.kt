@@ -38,8 +38,11 @@ class AuthViewModel @Inject constructor(
     private val _registerState = MutableStateFlow<LoginState>(LoginState.Idle)
     val registerState = _registerState.asStateFlow()
 
-    private val _forgotPasswordState = MutableStateFlow<ForgotPasswordState>(ForgotPasswordState.Idle)
-    val forgotPasswordState = _forgotPasswordState.asStateFlow()
+    private val _forgotPasswordOtpState = MutableStateFlow<ForgotPasswordOtpState>(ForgotPasswordOtpState.Idle)
+    val forgotPasswordOtpState = _forgotPasswordOtpState.asStateFlow()
+
+    private val _forgotPasswordResetState = MutableStateFlow<ForgotPasswordResetState>(ForgotPasswordResetState.Idle)
+    val forgotPasswordResetState = _forgotPasswordResetState.asStateFlow()
 
     private val _changePasswordState = MutableStateFlow<ChangePasswordState>(ChangePasswordState.Idle)
     val changePasswordState = _changePasswordState.asStateFlow()
@@ -58,24 +61,44 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    fun forgotPassword(email: String, newPassword: String) {
-        _forgotPasswordState.value = ForgotPasswordState.Loading
+    fun requestForgotPasswordOtp(email: String) {
+        _forgotPasswordOtpState.value = ForgotPasswordOtpState.Loading
         viewModelScope.launch {
-            val result = repository.forgotPassword(email = email, newPassword = newPassword)
+            val result = repository.requestForgotPasswordOtp(email = email)
             if (result.isSuccess) {
-                _forgotPasswordState.value = ForgotPasswordState.Success(
-                    result.getOrNull() ?: "Password reset successful"
+                _forgotPasswordOtpState.value = ForgotPasswordOtpState.Success(
+                    result.getOrNull() ?: "OTP sent successfully"
                 )
             } else {
-                _forgotPasswordState.value = ForgotPasswordState.Error(
-                    result.exceptionOrNull()?.message ?: "Failed to reset password"
+                _forgotPasswordOtpState.value = ForgotPasswordOtpState.Error(
+                    result.exceptionOrNull()?.message ?: "Failed to send OTP"
                 )
             }
         }
     }
 
-    fun resetForgotPasswordState() {
-        _forgotPasswordState.value = ForgotPasswordState.Idle
+    fun verifyForgotPasswordOtp(email: String, otp: String, newPassword: String) {
+        _forgotPasswordResetState.value = ForgotPasswordResetState.Loading
+        viewModelScope.launch {
+            val result = repository.verifyForgotPasswordOtp(email = email, otp = otp, newPassword = newPassword)
+            if (result.isSuccess) {
+                _forgotPasswordResetState.value = ForgotPasswordResetState.Success(
+                    result.getOrNull() ?: "Password reset successful"
+                )
+            } else {
+                _forgotPasswordResetState.value = ForgotPasswordResetState.Error(
+                    result.exceptionOrNull()?.message ?: "Failed to verify OTP"
+                )
+            }
+        }
+    }
+
+    fun resetForgotPasswordOtpState() {
+        _forgotPasswordOtpState.value = ForgotPasswordOtpState.Idle
+    }
+
+    fun resetForgotPasswordResetState() {
+        _forgotPasswordResetState.value = ForgotPasswordResetState.Idle
     }
 
     fun changePassword(currentPassword: String, newPassword: String) {
@@ -106,11 +129,18 @@ sealed class LoginState {
     data class Error(val message: String) : LoginState()
 }
 
-sealed class ForgotPasswordState {
-    object Idle : ForgotPasswordState()
-    object Loading : ForgotPasswordState()
-    data class Success(val message: String) : ForgotPasswordState()
-    data class Error(val message: String) : ForgotPasswordState()
+sealed class ForgotPasswordOtpState {
+    object Idle : ForgotPasswordOtpState()
+    object Loading : ForgotPasswordOtpState()
+    data class Success(val message: String) : ForgotPasswordOtpState()
+    data class Error(val message: String) : ForgotPasswordOtpState()
+}
+
+sealed class ForgotPasswordResetState {
+    object Idle : ForgotPasswordResetState()
+    object Loading : ForgotPasswordResetState()
+    data class Success(val message: String) : ForgotPasswordResetState()
+    data class Error(val message: String) : ForgotPasswordResetState()
 }
 
 sealed class ChangePasswordState {
