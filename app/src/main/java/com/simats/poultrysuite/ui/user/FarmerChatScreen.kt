@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -278,7 +279,11 @@ fun FarmerChatScreen(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(s.messages, key = { it.id }) { msg ->
+                        itemsIndexed(s.messages, key = { _, msg -> msg.id }) { index, msg ->
+                            val showDateDivider = if (index == 0) true else !isSameDay(s.messages[index - 1].createdAt, msg.createdAt)
+                            if (showDateDivider) {
+                                ChatDateDivider(date = formatChatDate(msg.createdAt))
+                            }
                             FarmerChatBubble(message = msg)
                         }
                     }
@@ -342,6 +347,42 @@ private fun FarmerChatBubble(message: ChatMessage) {
                 modifier = Modifier.padding(horizontal = 4.dp)
             )
         }
+    }
+}
+
+@Composable
+private fun ChatDateDivider(date: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = date,
+            fontSize = 12.sp,
+            color = Color(0xFF64748B),
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier
+                .background(Color(0xFFECEFF4), RoundedCornerShape(12.dp))
+                .padding(horizontal = 10.dp, vertical = 4.dp)
+        )
+    }
+}
+
+private fun isSameDay(isoA: String, isoB: String): Boolean {
+    val dateA = try { Instant.parse(isoA).atZone(ZoneId.systemDefault()).toLocalDate() } catch (_: Exception) { null }
+    val dateB = try { Instant.parse(isoB).atZone(ZoneId.systemDefault()).toLocalDate() } catch (_: Exception) { null }
+    return dateA != null && dateA == dateB
+}
+
+private fun formatChatDate(iso: String): String {
+    return try {
+        val formatter = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.getDefault())
+            .withZone(ZoneId.systemDefault())
+        formatter.format(Instant.parse(iso))
+    } catch (_: Exception) {
+        ""
     }
 }
 

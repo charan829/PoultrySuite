@@ -44,7 +44,13 @@ fun AddBatchScreen(
     var source by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
 
-    val birdTypes = listOf("LAYER" to "Layers", "BROILER" to "Broilers", "DUCK" to "Duck", "TURKEY" to "Turkey")
+    val birdTypes = listOf(
+        "LAYER" to "Layers",
+        "BROILER" to "Broilers",
+        "DUCK" to "Duck",
+        "TURKEY" to "Turkey",
+        "EGGS" to "Eggs"
+    )
 
     // Date picker
     val calendar = Calendar.getInstance()

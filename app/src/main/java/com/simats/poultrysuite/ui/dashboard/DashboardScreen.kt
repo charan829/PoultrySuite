@@ -204,6 +204,20 @@ fun DashboardScreen(
                         label = "Today Revenue"
                     )
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                KpiCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    icon = Icons.Default.Egg,
+                    iconTint = Color(0xFFFB8C00),
+                    iconBg = Color(0xFFFFF3E0),
+                    trendText = "",
+                    trendUp = true,
+                    value = "%,d".format(farm?.eggStock ?: 0),
+                    label = "Egg Batch Stock"
+                )
+
                 Spacer(modifier = Modifier.height(32.dp))
             }
 

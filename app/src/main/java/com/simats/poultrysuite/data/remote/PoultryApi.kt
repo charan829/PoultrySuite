@@ -142,8 +142,8 @@ interface PoultryApi {
         @POST("review")
         suspend fun submitReview(@Body request: com.simats.poultrysuite.data.model.ReviewRequest): retrofit2.Response<Unit>
 
-        @GET("review/farm/{farmId}")
-        suspend fun getFarmReviews(@Path("farmId") farmId: String): List<com.simats.poultrysuite.data.model.Review>
+    @POST("farm/profile/images")
+    suspend fun uploadFarmImages(@Body request: com.simats.poultrysuite.data.model.FarmImageUploadRequest): retrofit2.Response<Unit>
 
         @GET("review/can-review/{farmId}")
         suspend fun canReviewFarm(@Path("farmId") farmId: String): com.simats.poultrysuite.data.model.CanReviewResponse

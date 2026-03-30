@@ -124,12 +124,40 @@ fun InventoryScreen(
                     }
                 }
                 is InventoryState.Success -> {
+                    val feedRemaining = s.data.feedKg
+                    val medicineCount = s.data.medicineCount
                     val allBatches = s.data.batches
                     val filtered = when (selectedFilter) {
                         "Active" -> allBatches.filter { it.status == "Active" }
                         "Sold" -> allBatches.filter { it.status == "Sold" }
                         else -> allBatches
                     }
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = "Feed Remaining", fontSize = 12.sp, color = Color(0xFF64748B))
+                                Text(text = "${String.format("%.1f", feedRemaining)} kg", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF1E293B))
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = "Medicine Count", fontSize = 12.sp, color = Color(0xFF64748B))
+                                Text(text = "${medicineCount}", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF1E293B))
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     if (filtered.isEmpty()) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

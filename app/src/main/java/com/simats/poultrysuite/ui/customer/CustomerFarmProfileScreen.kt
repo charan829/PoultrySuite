@@ -5,6 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import coil.compose.AsyncImage
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -219,6 +222,28 @@ fun CustomerFarmProfileScreen(
 
                             Spacer(modifier = Modifier.height(14.dp))
 
+                            if (!farm.images.isNullOrEmpty()) {
+                                Text(
+                                    text = "Farm Photos",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = Color(0xFF1E293B)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    items(farm.images) { imageUrl ->
+                                        AsyncImage(
+                                            model = imageUrl,
+                                            contentDescription = "Farm image",
+                                            modifier = Modifier
+                                                .size(120.dp)
+                                                .clip(RoundedCornerShape(10.dp))
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(14.dp))
+                            }
+
                             Text(
                                 text = "We are a family-owned poultry farm focused on healthy birds and reliable delivery service.",
                                 color = Color(0xFF334155),
@@ -408,6 +433,21 @@ private fun FarmReviewRow(review: Review) {
                     fontSize = 13.sp,
                     lineHeight = 19.sp
                 )
+            }
+
+            if (!review.images.isNullOrEmpty()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(review.images) { imageUrl ->
+                        AsyncImage(
+                            model = imageUrl,
+                            contentDescription = "Review image",
+                            modifier = Modifier
+                                .size(70.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        )
+                    }
+                }
             }
         }
     }

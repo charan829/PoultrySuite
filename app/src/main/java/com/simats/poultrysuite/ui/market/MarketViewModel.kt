@@ -138,10 +138,11 @@ class MarketViewModel @Inject constructor(
         }
     }
 
-    fun submitReview(orderId: String, rating: Int, comment: String?, onSuccess: () -> Unit, onError: (String) -> Unit) {
+    fun submitReview(orderId: String, rating: Int, comment: String?, images: List<String>, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
-                val response = api.submitReview(ReviewRequest(orderId, rating, comment))
+                val request = ReviewRequest(orderId, rating, comment, images)
+                val response = api.submitReview(request)
                 if (response.isSuccessful) {
                     onSuccess()
                 } else {

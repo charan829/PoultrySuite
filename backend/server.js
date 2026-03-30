@@ -2,6 +2,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
@@ -59,6 +60,13 @@ const sendForgotPasswordOtp = async (email, otp) => {
 
     return true;
 };
+
+// Serve uploaded assets
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir);
+}
+app.use('/uploads', express.static(uploadsDir));
 
 app.use(cors());
 app.use(express.json());
@@ -382,11 +390,19 @@ app.get('/farm/dashboard', authenticateToken, async (req, res) => {
 
         if (!farm) return res.status(404).json({ error: "Farm not found" });
 
-        // 1. Total Birds
-        const totalBirds = farm.batches.reduce((sum, b) => sum + b.count, 0);
-        const totalMortality = farm.batches.reduce((sum, b) => sum + b.mortality, 0);
-        // Birds Trend (inverse mortality impact over total)
+        // 1. Total Birds (exclude eggs batches)
+        const totalBirds = farm.batches
+            .filter(b => b.type !== 'EGGS')
+            .reduce((sum, b) => sum + b.count, 0);
+        const totalMortality = farm.batches
+            .filter(b => b.type !== 'EGGS')
+            .reduce((sum, b) => sum + b.mortality, 0);
         const birdsTrend = totalBirds > 0 ? -((totalMortality / totalBirds) * 100) : 0;
+
+        // 1.1 Egg Inventory (EGGS batches)
+        const eggStock = farm.batches
+            .filter(b => b.type === 'EGGS')
+            .reduce((sum, b) => sum + b.count, 0);
 
         // 2. Eggs Today (Based on active layers, assuming 85% yield for mature birds > 120 days)
         const activeLayers = farm.batches.filter(b => b.type === 'LAYER' && b.ageDays > 120)
@@ -469,6 +485,7 @@ app.get('/farm/dashboard', authenticateToken, async (req, res) => {
         res.json({
             ...farm,
             totalBirds,
+            eggStock,
             birdsTrend: parseFloat(birdsTrend.toFixed(1)),
             eggsToday,
             eggsTrend: parseFloat(eggsTrend.toFixed(1)),
@@ -504,8 +521,52 @@ app.get('/farm/profile', authenticateToken, async (req, res) => {
             email: user.email,
             phone: user.phone || 'N/A',
             farmName: mainFarm ? mainFarm.name : 'Unknown Farm',
-            location: mainFarm ? (mainFarm.location || 'Unknown Location') : 'Unknown Location'
+            location: mainFarm ? (mainFarm.location || 'Unknown Location') : 'Unknown Location',
+            farmImages: mainFarm?.images || []
         });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Upload farm images (Farmer only)
+app.post('/farm/profile/images', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+    const { images } = req.body;
+
+    if (!Array.isArray(images)) {
+        return res.status(400).json({ error: 'Invalid images payload; expected array of base64 strings' });
+    }
+
+    try {
+        const farm = await prisma.farm.findUnique({ where: { ownerId: req.user.id } });
+        if (!farm) return res.status(404).json({ error: 'Farm not found' });
+
+        const uploadedUrls = [];
+        for (let i = 0; i < images.length; i++) {
+            const imageData = images[i];
+            if (typeof imageData !== 'string' || !imageData.trim()) continue;
+
+            let base64 = imageData;
+            let ext = 'jpg';
+            const matches = imageData.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/);
+            if (matches) {
+                ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+                base64 = matches[2];
+            }
+
+            const buffer = Buffer.from(base64, 'base64');
+            const fileName = `farm_${farm.id}_${Date.now()}_${i}.${ext}`;
+            const filePath = path.join(uploadsDir, fileName);
+            fs.writeFileSync(filePath, buffer);
+
+            uploadedUrls.push(`${req.protocol}://${req.get('host')}/uploads/${fileName}`);
+        }
+
+        const newImages = [...(farm.images || []), ...uploadedUrls];
+        await prisma.farm.update({ where: { id: farm.id }, data: { images: newImages } });
+
+        res.json({ message: 'Farm images uploaded successfully', images: newImages });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -551,19 +612,47 @@ app.put('/farm/profile', authenticateToken, async (req, res) => {
 
 // Add Batch
 app.post('/farm/batch', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.status(403).json({ error: 'Only farmers can add batches' });
+
     const { type, count, ageDays } = req.body;
+
+    if (!type || !count) {
+        return res.status(400).json({ error: 'Batch type and count are required' });
+    }
+
+    const normalizedType = type.toString().trim().toUpperCase();
+    const allowedTypes = ['BROILER', 'LAYER', 'DUCK', 'TURKEY', 'EGGS'];
+    if (!allowedTypes.includes(normalizedType)) {
+        return res.status(400).json({ error: `Invalid batch type (${type}). Must be one of ${allowedTypes.join(', ')}` });
+    }
+
+    const parsedCount = parseInt(count, 10);
+    if (Number.isNaN(parsedCount) || parsedCount < 0) {
+        return res.status(400).json({ error: 'Count must be a non-negative integer' });
+    }
+
+    const parsedAgeDays = parseInt(ageDays || '0', 10);
+    if (Number.isNaN(parsedAgeDays) || parsedAgeDays < 0) {
+        return res.status(400).json({ error: 'ageDays must be a non-negative integer' });
+    }
+
     try {
         const farm = await prisma.farm.findUnique({ where: { ownerId: req.user.id } });
+        if (!farm) {
+            return res.status(404).json({ error: 'Farm not found for current user' });
+        }
+
         const batch = await prisma.batch.create({
             data: {
                 farmId: farm.id,
-                type,
-                count: parseInt(count),
-                ageDays: parseInt(ageDays || 0)
+                type: normalizedType,
+                count: parsedCount,
+                ageDays: parsedAgeDays
             }
         });
         res.json(batch);
     } catch (e) {
+        console.error('Error creating batch:', e);
         res.status(500).json({ error: e.message });
     }
 });
@@ -670,7 +759,17 @@ app.post('/farm/batch/:id/feed', authenticateToken, async (req, res) => {
     if (req.user.role !== 'FARMER') return res.sendStatus(403);
     const batchId = parseInt(req.params.id);
     const { amountKg, notes } = req.body;
+
     try {
+        const batch = await prisma.batch.findUnique({
+            where: { id: batchId },
+            include: { farm: true }
+        });
+
+        if (!batch) {
+            return res.status(404).json({ error: 'Batch not found' });
+        }
+
         const log = await prisma.feedLog.create({
             data: {
                 batchId,
@@ -678,6 +777,21 @@ app.post('/farm/batch/:id/feed', authenticateToken, async (req, res) => {
                 notes: notes || ''
             }
         });
+
+        if (batch.farmId) {
+            const inventory = await prisma.inventory.findUnique({
+                where: { farmId: batch.farmId }
+            });
+
+            if (inventory) {
+                const newFeedKg = Math.max(inventory.feedKg - parseFloat(amountKg), 0);
+                await prisma.inventory.update({
+                    where: { id: inventory.id },
+                    data: { feedKg: newFeedKg }
+                });
+            }
+        }
+
         res.json({ message: 'Feed logged successfully', log });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -1868,7 +1982,7 @@ app.get('/admin/reports', async (req, res) => {
 // Submit a Review (Customer only, one review per order)
 app.post('/review', authenticateToken, async (req, res) => {
     if (req.user.role !== 'CUSTOMER') return res.sendStatus(403);
-    const { orderId, rating, comment } = req.body;
+    const { orderId, rating, comment, images } = req.body;
 
     if (!orderId || !rating) {
         return res.status(400).json({ error: 'orderId and rating are required' });
@@ -1887,13 +2001,16 @@ app.post('/review', authenticateToken, async (req, res) => {
         if (order.customerId !== req.user.id) return res.status(403).json({ error: 'Not your order' });
         if (order.status !== 'COMPLETED') return res.status(400).json({ error: 'Order not yet completed' });
 
+        const processedImages = Array.isArray(images) ? images : [];
+
         const review = await prisma.review.create({
             data: {
                 farmId: order.product.farmId,
                 customerId: req.user.id,
                 orderId: parseInt(orderId),
                 rating: parseInt(rating),
-                comment: comment || null
+                comment: comment || null,
+                images: processedImages
             }
         });
 
@@ -1919,6 +2036,7 @@ app.get('/review/farm/:farmId', async (req, res) => {
             id: r.id.toString(),
             rating: r.rating,
             comment: r.comment,
+            images: r.images || [],
             customerName: r.customer.name || 'Anonymous',
             createdAt: r.createdAt
         })));

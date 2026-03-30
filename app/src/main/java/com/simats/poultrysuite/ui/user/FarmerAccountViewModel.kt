@@ -33,6 +33,22 @@ class FarmerAccountViewModel @Inject constructor(
             }
         }
     }
+
+    fun uploadFarmImages(images: List<String>, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val response = api.uploadFarmImages(com.simats.poultrysuite.data.model.FarmImageUploadRequest(images))
+                if (response.isSuccessful) {
+                    onSuccess()
+                    loadProfile()
+                } else {
+                    onError("Failed to upload farm images")
+                }
+            } catch (e: Exception) {
+                onError(e.message ?: "Failed to upload farm images")
+            }
+        }
+    }
 }
 
 sealed class FarmerProfileState {

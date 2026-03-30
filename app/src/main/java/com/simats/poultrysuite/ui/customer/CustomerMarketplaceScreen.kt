@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import java.util.Locale
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.simats.poultrysuite.data.model.ProductRequest
@@ -162,11 +163,23 @@ fun CustomerMarketplaceScreen(
                     }
 
                     is MarketState.Success -> {
+                        fun matchesCategory(itemType: String, category: String): Boolean {
+                            if (category == "All") return true
+                            val typeLower = itemType.lowercase(Locale.getDefault())
+                            return when (category) {
+                                "Eggs" -> typeLower.contains("egg")
+                                "Broilers" -> typeLower.contains("broiler") || typeLower.contains("broilers")
+                                "Layers" -> typeLower.contains("layer") || typeLower.contains("layers")
+                                "Chicks" -> typeLower.contains("chick") || typeLower.contains("chicks")
+                                else -> false
+                            }
+                        }
+
                         val filteredListings = s.listings.filter { item ->
                             val matchesSearch = item.type.contains(searchQuery, ignoreCase = true)
-                            val matchesCategory = if (selectedCategory == "All") true else item.type.equals(selectedCategory, ignoreCase = true)
+                            val matchesCategory = matchesCategory(item.type, selectedCategory)
                             // Customers only see Available items
-                            val isAvailable = item.status.lowercase() == "available"
+                            val isAvailable = item.status.lowercase(Locale.getDefault()) == "available"
 
                             matchesSearch && matchesCategory && isAvailable
                         }

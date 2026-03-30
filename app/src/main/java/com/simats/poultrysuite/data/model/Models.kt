@@ -15,9 +15,11 @@ data class Farm(
     val location: String?,
     val batches: List<Batch>?,
     val inventory: List<Inventory>?,
+    val images: List<String>? = emptyList(),
     
     // KPI Metrics
     val totalBirds: Int? = 0,
+    val eggStock: Int? = 0,
     val birdsTrend: Double? = 0.0,
     val eggsToday: Int? = 0,
     val eggsTrend: Double? = 0.0,
@@ -52,7 +54,8 @@ data class FarmerProfile(
     val email: String,
     val phone: String,
     val farmName: String,
-    val location: String
+    val location: String,
+    val farmImages: List<String>? = emptyList()
 )
 
 data class FarmerProfileUpdateRequest(
@@ -262,6 +265,7 @@ data class Review(
     val id: String,
     val rating: Int,
     val comment: String?,
+    val images: List<String>?,
     val customerName: String,
     val createdAt: String
 )
@@ -269,7 +273,12 @@ data class Review(
 data class ReviewRequest(
     val orderId: String,
     val rating: Int,
-    val comment: String?
+    val comment: String?,
+    val images: List<String>? = emptyList()
+)
+
+data class FarmImageUploadRequest(
+    val images: List<String>
 )
 
 data class CanReviewResponse(

@@ -42,7 +42,7 @@ fun AddSaleScreen(
     var notes by remember { mutableStateOf("") }
     var dropdownExpanded by remember { mutableStateOf(false) }
 
-    val productTypes = listOf("BROILER", "LAYER", "DUCK", "TURKEY")
+    val productTypes = listOf("BROILER", "LAYER", "DUCK", "TURKEY", "EGGS")
     val totalPrice = (quantity.toIntOrNull() ?: 0) * (pricePerUnit.toDoubleOrNull() ?: 0.0)
 
     LaunchedEffect(saleState) {

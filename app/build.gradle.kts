@@ -90,6 +90,9 @@ dependencies {
     // Navigation
     implementation(libs.androidx.navigation.compose)
 
+    // Image loading (for review/farm photo previews)
+    implementation("io.coil-kt:coil-compose:2.4.0")
+
     // DataStore
     implementation(libs.androidx.datastore.preferences)
 
