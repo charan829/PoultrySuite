@@ -404,10 +404,14 @@ app.get('/farm/dashboard', authenticateToken, async (req, res) => {
             .filter(b => b.type === 'EGGS')
             .reduce((sum, b) => sum + b.count, 0);
 
-        // 2. Eggs Today (Based on active layers, assuming 85% yield for mature birds > 120 days)
+        // 2. Eggs Today (Prefer layer-based production; fallback to current eggs inventory when no mature layer batches)
         const activeLayers = farm.batches.filter(b => b.type === 'LAYER' && b.ageDays > 120)
             .reduce((sum, b) => sum + b.count, 0);
-        const eggsToday = Math.floor(activeLayers * 0.85); // 85% laying rate
+        let eggsToday = Math.floor(activeLayers * 0.85); // 85% laying rate
+        if (eggsToday === 0) {
+            // fallback to eggs inventory if layers are not yet mature or no layer batches exist
+            eggsToday = eggStock;
+        }
 
         // Eggs Trend (Based on whether new layers reached maturity this week)
         const newlyMatureLayers = farm.batches.filter(b => b.type === 'LAYER' && b.ageDays >= 120 && b.ageDays < 127)
