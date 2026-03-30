@@ -19,7 +19,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.Swhile trying to troke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -138,7 +138,7 @@ fun DashboardScreen(
 
                 val totalBirds = farm?.totalBirds ?: 0
                 val birdsTrend = farm?.birdsTrend ?: 0.0
-                val eggsToday = farm?.eggsToday ?: 0
+                val eggsStock = farm?.eggStock ?: 0
                 val eggsTrend = farm?.eggsTrend ?: 0.0
                 val feedRemaining = farm?.feedRemaining ?: 0.0
                 val feedTrend = farm?.feedTrend ?: 0.0
@@ -174,8 +174,8 @@ fun DashboardScreen(
                         iconBg = Color(0xFFFFF8E1),
                         trendText = trendStr(eggsTrend),
                         trendUp = eggsTrend >= 0,
-                        value = "%,d".format(eggsToday),
-                        label = "Eggs Today"
+                        value = "%,d".format(eggsStock),
+                        label = "Eggs Stock"
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -204,19 +204,6 @@ fun DashboardScreen(
                         label = "Today Revenue"
                     )
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                KpiCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    icon = Icons.Default.Egg,
-                    iconTint = Color(0xFFFB8C00),
-                    iconBg = Color(0xFFFFF3E0),
-                    trendText = "",
-                    trendUp = true,
-                    value = "%,d".format(farm?.eggStock ?: 0),
-                    label = "Egg Batch Stock"
-                )
 
                 Spacer(modifier = Modifier.height(32.dp))
             }
