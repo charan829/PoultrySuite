@@ -138,7 +138,7 @@ class MarketViewModel @Inject constructor(
         }
     }
 
-    fun submitReview(orderId: String, rating: Int, comment: String?, images: List<String>, onSuccess: () -> Unit, onError: (String) -> Unit) {
+    fun submitReview(orderId: String, rating: Int, comment: String?, images: List<String> = emptyList(), onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
                 val request = ReviewRequest(orderId, rating, comment, images)

@@ -17,8 +17,8 @@ import kotlinx.coroutines.runBlocking
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    // Uses `adb reverse tcp:3000 tcp:3000` — works for USB-connected physical devices and emulators
-    private const val BASE_URL = "http://localhost:3000/"
+    // Use the host machine's LAN IP so the device can reach the backend directly.
+    private const val BASE_URL = "http://10.102.137.151:3000/"
 
     @Provides
     @Singleton

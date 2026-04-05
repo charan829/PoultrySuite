@@ -1,10 +1,8 @@
 package com.simats.poultrysuite.ui.user
 
-import android.net.Uri
-import android.util.Base64
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -18,6 +16,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -37,6 +38,7 @@ fun FarmerAccountScreen(
     viewModel: FarmerAccountViewModel = hiltViewModel()
 ) {
     val profileState by viewModel.profileState.collectAsState()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -81,16 +83,7 @@ fun FarmerAccountScreen(
                         onEditClick = {
                             navController.navigate(com.simats.poultrysuite.ui.navigation.Screen.FarmerEditProfile.route)
                         },
-                        onUploadFarmImages = { images ->
-                            viewModel.uploadFarmImages(images,
-                                onSuccess = {
-                                    Toast.makeText(context, "Farm images uploaded.", Toast.LENGTH_SHORT).show()
-                                },
-                                onError = { message ->
-                                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                                }
-                            )
-                        }
+                
                     )
                 }
             }
@@ -99,11 +92,8 @@ fun FarmerAccountScreen(
 }
 
 @Composable
-fun AccountContent(profile: FarmerProfile, onEditClick: () -> Unit, onUploadFarmImages: (List<String>) -> Unit) {
-    var selectedImageUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
-    val pickImagesLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-        selectedImageUris = uris.take(5)
-    }
+fun AccountContent(profile: FarmerProfile, onEditClick: () -> Unit) {
+    val context = LocalContext.current
 
     LazyColumn(
         modifier = Modifier
@@ -185,63 +175,6 @@ fun AccountContent(profile: FarmerProfile, onEditClick: () -> Unit, onUploadFarm
             }
             Spacer(modifier = Modifier.height(32.dp))
         }
-
-        // Upload Farm Images
-        item {
-            Button(
-                onClick = { pickImagesLauncher.launch("image/*") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEEF2FF))
-            ) {
-                Text(
-                    text = "Pick Farm Images",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF1D4ED8)
-                )
-            }
-        }
-        item {
-            if (selectedImageUris.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 16.dp)) {
-                    items(selectedImageUris) { uri ->
-                        AsyncImage(
-                            model = uri,
-                            contentDescription = "Selected farm image",
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-        }
-        item {
-            Button(
-                onClick = {
-                    if (selectedImageUris.isEmpty()) return@Button
-                    val base64Images = selectedImageUris.mapNotNull { uri ->
-                        uriToBase64(LocalContext.current, uri)
-                    }
-                    onUploadFarmImages(base64Images)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))
-            ) {
-                Text(text = "Upload Farm Images", fontSize = 14.sp, color = Color.White)
-            }
-        }
-        item {
-            Spacer(modifier = Modifier.height(20.dp))
-        }
         // Edit Profile Button
         item {
             Button(
@@ -283,5 +216,12 @@ fun AccountDetailRow(label: String, value: String) {
             color = Color(0xFF1E293B),
             fontWeight = FontWeight.Medium // Mockup has slightly bold/medium weight for values
         )
+    }
+}
+
+
+        bytes?.let { Base64.encodeToString(it, Base64.NO_WRAP) }
+    } catch (_: Exception) {
+        null
     }
 }

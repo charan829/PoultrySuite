@@ -1,13 +1,8 @@
 package com.simats.poultrysuite.ui.customer
 
-import android.net.Uri
-import android.util.Base64
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import coil.compose.AsyncImage
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Star
@@ -71,11 +67,6 @@ fun CustomerWriteReviewScreen(
     var rating by remember { mutableIntStateOf(0) }
     var comment by remember { mutableStateOf("") }
     var isSubmitting by remember { mutableStateOf(false) }
-    var selectedImageUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
-
-    val pickImagesLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-        selectedImageUris = uris.take(5) // max 5 images
-    }
 
     LaunchedEffect(orderId) {
         if (ordersState !is OrdersState.Success) {
@@ -228,40 +219,15 @@ fun CustomerWriteReviewScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Button(onClick = { pickImagesLauncher.launch("image/*") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEEF2FF))) {
-                        Text("Add Photos", color = Color(0xFF1D4ED8), fontWeight = FontWeight.SemiBold)
-                    }
-
-                    if (selectedImageUris.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            selectedImageUris.forEach { uri ->
-                                AsyncImage(
-                                    model = uri,
-                                    contentDescription = "Selected image",
-                                    modifier = Modifier
-                                        .size(70.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
                     Button(
                         onClick = {
                             if (rating <= 0) return@Button
                             isSubmitting = true
-                            val imageBase64 = selectedImageUris.mapNotNull { uri -> uriToBase64(context, uri) }
                             viewModel.submitReview(
                                 orderId = order.id,
                                 rating = rating,
                                 comment = comment.takeIf { it.isNotBlank() },
-                                images = imageBase64,
+                                images = emptyList(),
                                 onSuccess = {
                                     isSubmitting = false
                                     Toast.makeText(context, "Review submitted! Thank you.", Toast.LENGTH_SHORT).show()
@@ -296,17 +262,5 @@ fun CustomerWriteReviewScreen(
                 }
             }
         }
-    }
-}
-
-fun uriToBase64(context: android.content.Context, uri: Uri): String? {
-    return try {
-        val inputStream = context.contentResolver.openInputStream(uri)
-        val bytes = inputStream?.readBytes()
-        inputStream?.close()
-        bytes?.let { Base64.encodeToString(it, Base64.NO_WRAP) }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        null
     }
 }
