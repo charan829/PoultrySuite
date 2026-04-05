@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
@@ -15,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -31,7 +33,10 @@ fun InventoryScreen(
     viewModel: InventoryViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
     var selectedFilter by remember { mutableStateOf("All") }
+    var showAddFeedDialog by remember { mutableStateOf(false) }
+    var addFeedInput by remember { mutableStateOf("") }
     val filters = listOf("All", "Active", "Sold")
 
     // Refresh when screen resumes
@@ -149,6 +154,16 @@ fun InventoryScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(text = "Feed Remaining", fontSize = 12.sp, color = Color(0xFF64748B))
                                 Text(text = "${String.format("%.1f", feedRemaining)} kg", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF1E293B))
+                                Spacer(modifier = Modifier.height(6.dp))
+                                TextButton(
+                                    onClick = {
+                                        addFeedInput = ""
+                                        showAddFeedDialog = true
+                                    },
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Text(text = "Add Feed", color = Color(0xFF1565C0), fontWeight = FontWeight.SemiBold)
+                                }
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(text = "Medicine Count", fontSize = 12.sp, color = Color(0xFF64748B))
@@ -192,6 +207,51 @@ fun InventoryScreen(
                     }
                 }
             }
+        }
+
+        if (showAddFeedDialog) {
+            AlertDialog(
+                onDismissRequest = { showAddFeedDialog = false },
+                title = { Text("Add Feed Stock") },
+                text = {
+                    OutlinedTextField(
+                        value = addFeedInput,
+                        onValueChange = { addFeedInput = it },
+                        singleLine = true,
+                        label = { Text("Amount (kg)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val amount = addFeedInput.toDoubleOrNull()
+                            if (amount == null || amount <= 0.0) {
+                                android.widget.Toast.makeText(context, "Enter a valid feed amount", android.widget.Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            viewModel.addFeed(
+                                amountKg = addFeedInput,
+                                onSuccess = {
+                                    showAddFeedDialog = false
+                                    android.widget.Toast.makeText(context, "Feed added successfully", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                onError = { message ->
+                                    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        }
+                    ) {
+                        Text("Add")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAddFeedDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
         }
     }
 }

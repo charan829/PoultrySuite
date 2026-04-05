@@ -31,6 +31,22 @@ class InventoryViewModel @Inject constructor(
             }
         }
     }
+
+    fun addFeed(amountKg: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val response = api.addFeedStock(mapOf("amountKg" to amountKg))
+                if (response.isSuccessful) {
+                    onSuccess()
+                    loadInventory()
+                } else {
+                    onError("Failed to add feed")
+                }
+            } catch (e: Exception) {
+                onError(e.message ?: "Failed to add feed")
+            }
+        }
+    }
 }
 
 sealed class InventoryState {

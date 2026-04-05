@@ -70,6 +70,11 @@ interface PoultryApi {
     @GET("farm/inventory")
     suspend fun getInventory(): com.simats.poultrysuite.data.model.InventoryResponse
 
+    @POST("farm/inventory/feed")
+    suspend fun addFeedStock(
+        @Body request: Map<String, String>
+    ): retrofit2.Response<Unit>
+
     @GET("farm/batch/{id}")
     suspend fun getBatchDetail(@retrofit2.http.Path("id") id: String): com.simats.poultrysuite.data.model.BatchDetail
     
@@ -144,6 +149,9 @@ interface PoultryApi {
 
         @GET("review/farm/{farmId}")
         suspend fun getFarmReviews(@Path("farmId") farmId: String): List<com.simats.poultrysuite.data.model.Review>
+
+        @GET("farm/reviews")
+        suspend fun getFarmerReviews(): List<com.simats.poultrysuite.data.model.Review>
 
     @POST("farm/profile/images")
     suspend fun uploadFarmImages(@Body request: com.simats.poultrysuite.data.model.FarmImageUploadRequest): retrofit2.Response<Unit>

@@ -100,6 +100,16 @@ fun FarmerSettingsScreen(
                         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF1F5F9))
 
                         FarmerSettingBlock(
+                            icon = Icons.Default.Star,
+                            iconTint = Color(0xFFF59E0B),
+                            iconBg = Color(0xFFFFF8E1),
+                            title = "Customer Reviews",
+                            subtitle = "See what customers are saying",
+                            onClick = { navController.navigate(Screen.FarmerReviews.route) }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF1F5F9))
+
+                        FarmerSettingBlock(
                             icon = Icons.Default.Info,
                             iconTint = Color(0xFF607D8B),
                             iconBg = Color(0xFFECEFF1),

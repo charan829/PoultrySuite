@@ -30,6 +30,7 @@ sealed class Screen(val route: String) {
     object AdminNotifications : Screen("admin_notifications")
     object AdminSecurity : Screen("admin_security")
     object FarmerSettings : Screen("farmer_settings")
+    object FarmerReviews : Screen("farmer_reviews")
     object FarmerAccount : Screen("farmer_account")
     object FarmerNotifications : Screen("farmer_notifications")
     object FarmerSecurity : Screen("farmer_security")

@@ -802,6 +802,37 @@ app.post('/farm/batch/:id/feed', authenticateToken, async (req, res) => {
     }
 });
 
+// Add Feed Stock to Farm Inventory
+app.post('/farm/inventory/feed', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+    const parsedAmountKg = parseFloat(req.body.amountKg);
+
+    if (Number.isNaN(parsedAmountKg) || parsedAmountKg <= 0) {
+        return res.status(400).json({ error: 'amountKg must be a positive number' });
+    }
+
+    try {
+        const farm = await prisma.farm.findUnique({ where: { ownerId: req.user.id } });
+        if (!farm) return res.status(404).json({ error: 'Farm not found' });
+
+        const inventory = await prisma.inventory.upsert({
+            where: { farmId: farm.id },
+            create: {
+                farmId: farm.id,
+                feedKg: parsedAmountKg,
+                medicineCount: 0
+            },
+            update: {
+                feedKg: { increment: parsedAmountKg }
+            }
+        });
+
+        res.json({ message: 'Feed stock updated', feedKg: inventory.feedKg });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Get Farm Inventory (Batches with status)
 app.get('/farm/inventory', authenticateToken, async (req, res) => {
     if (req.user.role !== 'FARMER') return res.sendStatus(403);
@@ -2032,6 +2063,33 @@ app.get('/review/farm/:farmId', async (req, res) => {
     try {
         const reviews = await prisma.review.findMany({
             where: { farmId: parseInt(req.params.farmId) },
+            include: { customer: { select: { name: true } } },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        res.json(reviews.map(r => ({
+            id: r.id.toString(),
+            rating: r.rating,
+            comment: r.comment,
+            images: r.images || [],
+            customerName: r.customer.name || 'Anonymous',
+            createdAt: r.createdAt
+        })));
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Get all reviews for the logged-in farmer's farm
+app.get('/farm/reviews', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+
+    try {
+        const farm = await prisma.farm.findUnique({ where: { ownerId: req.user.id } });
+        if (!farm) return res.status(404).json({ error: 'Farm not found' });
+
+        const reviews = await prisma.review.findMany({
+            where: { farmId: farm.id },
             include: { customer: { select: { name: true } } },
             orderBy: { createdAt: 'desc' }
         });

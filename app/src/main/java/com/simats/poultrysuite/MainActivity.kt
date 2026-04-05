@@ -127,6 +127,9 @@ fun AppNavigation() {
         composable(com.simats.poultrysuite.ui.navigation.Screen.FarmerAccount.route) {
             com.simats.poultrysuite.ui.user.FarmerAccountScreen(navController = navController)
         }
+        composable(com.simats.poultrysuite.ui.navigation.Screen.FarmerReviews.route) {
+            com.simats.poultrysuite.ui.user.FarmerReviewsScreen(navController = navController)
+        }
         composable(com.simats.poultrysuite.ui.navigation.Screen.FarmerEditProfile.route) {
             com.simats.poultrysuite.ui.user.FarmerEditProfileScreen(navController = navController)
         }
