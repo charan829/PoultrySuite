@@ -37,6 +37,8 @@ fun InventoryScreen(
     var selectedFilter by remember { mutableStateOf("All") }
     var showAddFeedDialog by remember { mutableStateOf(false) }
     var addFeedInput by remember { mutableStateOf("") }
+    var showAddMedicineDialog by remember { mutableStateOf(false) }
+    var addMedicineInput by remember { mutableStateOf("") }
     val filters = listOf("All", "Active", "Sold")
 
     // Refresh when screen resumes
@@ -168,6 +170,16 @@ fun InventoryScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(text = "Medicine Count", fontSize = 12.sp, color = Color(0xFF64748B))
                                 Text(text = "${medicineCount}", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF1E293B))
+                                Spacer(modifier = Modifier.height(6.dp))
+                                TextButton(
+                                    onClick = {
+                                        addMedicineInput = ""
+                                        showAddMedicineDialog = true
+                                    },
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Text(text = "Add Medicine", color = Color(0xFF1565C0), fontWeight = FontWeight.SemiBold)
+                                }
                             }
                         }
                     }
@@ -248,6 +260,51 @@ fun InventoryScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showAddFeedDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        if (showAddMedicineDialog) {
+            AlertDialog(
+                onDismissRequest = { showAddMedicineDialog = false },
+                title = { Text("Add Medicine Stock") },
+                text = {
+                    OutlinedTextField(
+                        value = addMedicineInput,
+                        onValueChange = { addMedicineInput = it.filter { ch -> ch.isDigit() } },
+                        singleLine = true,
+                        label = { Text("Count") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val count = addMedicineInput.toIntOrNull()
+                            if (count == null || count <= 0) {
+                                android.widget.Toast.makeText(context, "Enter a valid medicine count", android.widget.Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            viewModel.addMedicine(
+                                count = addMedicineInput,
+                                onSuccess = {
+                                    showAddMedicineDialog = false
+                                    android.widget.Toast.makeText(context, "Medicine count updated", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                onError = { message ->
+                                    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        }
+                    ) {
+                        Text("Add")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAddMedicineDialog = false }) {
                         Text("Cancel")
                     }
                 }

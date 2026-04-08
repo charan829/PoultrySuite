@@ -178,6 +178,7 @@ data class Order(
     val totalPrice: Double,
     val status: String,
     val createdAt: String? = null,
+    val dueDate: String? = null,
     val product: ProductRequest? = null,
     val buyerName: String? = null,
     val notes: String? = null,

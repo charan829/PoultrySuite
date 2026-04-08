@@ -160,6 +160,7 @@ model Order {
   status        OrderStatus @default(PENDING)
   totalPrice    Float
   createdAt     DateTime    @default(now())
+  dueDate       DateTime?
 
   // Farmer direct sale fields (optional for marketplace orders)
   buyerName     String?

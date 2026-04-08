@@ -47,6 +47,22 @@ class InventoryViewModel @Inject constructor(
             }
         }
     }
+
+    fun addMedicine(count: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val response = api.addMedicineStock(mapOf("count" to count))
+                if (response.isSuccessful) {
+                    onSuccess()
+                    loadInventory()
+                } else {
+                    onError("Failed to add medicine")
+                }
+            } catch (e: Exception) {
+                onError(e.message ?: "Failed to add medicine")
+            }
+        }
+    }
 }
 
 sealed class InventoryState {

@@ -44,6 +44,14 @@ if (!transporter) {
 
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
 
+const createEstimatedDeliveryDate = (baseDate = new Date()) => {
+    const deliveryOffsetDays = Math.floor(Math.random() * 4) + 2;
+    const dueDate = new Date(baseDate);
+    dueDate.setDate(dueDate.getDate() + deliveryOffsetDays);
+    dueDate.setHours(18, 0, 0, 0);
+    return dueDate;
+};
+
 const sendForgotPasswordOtp = async (email, otp) => {
     if (!transporter) {
         console.log(`[OTP DEV MODE] ${email} -> ${otp}`);
@@ -833,6 +841,37 @@ app.post('/farm/inventory/feed', authenticateToken, async (req, res) => {
     }
 });
 
+// Add Medicine Stock to Farm Inventory
+app.post('/farm/inventory/medicine', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'FARMER') return res.sendStatus(403);
+    const parsedCount = parseInt(req.body.count, 10);
+
+    if (Number.isNaN(parsedCount) || parsedCount <= 0) {
+        return res.status(400).json({ error: 'count must be a positive integer' });
+    }
+
+    try {
+        const farm = await prisma.farm.findUnique({ where: { ownerId: req.user.id } });
+        if (!farm) return res.status(404).json({ error: 'Farm not found' });
+
+        const inventory = await prisma.inventory.upsert({
+            where: { farmId: farm.id },
+            create: {
+                farmId: farm.id,
+                feedKg: 0,
+                medicineCount: parsedCount
+            },
+            update: {
+                medicineCount: { increment: parsedCount }
+            }
+        });
+
+        res.json({ message: 'Medicine stock updated', medicineCount: inventory.medicineCount });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Get Farm Inventory (Batches with status)
 app.get('/farm/inventory', authenticateToken, async (req, res) => {
     if (req.user.role !== 'FARMER') return res.sendStatus(403);
@@ -1318,6 +1357,7 @@ app.post('/market/order', authenticateToken, async (req, res) => {
                     status: 'PENDING',
                     buyerName: customer?.name || 'Customer',
                     paymentStatus: 'Pending',
+                    dueDate: createEstimatedDeliveryDate(),
                     notes: `${modeTag}${addressTag} Order for ${requestedQuantity} ${product.type}`.trim()
                 }
             });
@@ -1354,6 +1394,7 @@ app.get('/market/my-orders', authenticateToken, async (req, res) => {
                 ...order,
                 purchaseType: isInStore ? 'IN_STORE' : 'ONLINE',
                 deliveryAddress: isInStore ? null : parsedAddress,
+                dueDate: order.dueDate,
                 isReviewed: review !== null
             };
         }));
@@ -1395,12 +1436,12 @@ app.get('/admin/farms', async (req, res) => {
             };
         });
 
+                dueDate: order.dueDate || createEstimatedDeliveryDate(order.createdAt),
         res.json(farmData);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
-
 // Get Single Farm Details (Admin)
 app.get('/admin/farm/:id', async (req, res) => {
     const { id } = req.params;

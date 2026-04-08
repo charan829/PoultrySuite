@@ -54,6 +54,7 @@ import com.simats.poultrysuite.ui.market.MarketViewModel
 import com.simats.poultrysuite.ui.market.OrdersState
 import com.simats.poultrysuite.ui.navigation.Screen
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Calendar
 import java.util.Locale
 
@@ -189,7 +190,8 @@ private fun TrackingContent(
         ?: order.product?.farm?.location
         ?: "Address unavailable"
 
-    val createdAt = parseIso(order.createdAt)
+    val createdAt = parseIso(order.createdAt) ?: Calendar.getInstance()
+    val estimatedDeliveryAt = parseIso(order.dueDate) ?: addDays(createdAt, 2)
 
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
@@ -333,7 +335,7 @@ private fun TrackingContent(
                         fontSize = 15.sp
                     )
                     Text(
-                        text = if (deliveredDone) "Delivered" else "Estimated delivery: Today, 4:00 PM",
+                        text = if (deliveredDone) "Delivered" else "Estimated delivery: ${formatFullDate(estimatedDeliveryAt)}",
                         color = Color(0xFF6B7280),
                         fontSize = 13.sp
                     )
@@ -419,9 +421,10 @@ private fun TimelineStep(
     }
 }
 
-private fun parseIso(value: String?): Calendar {
+private fun parseIso(value: String?): Calendar? {
+    if (value.isNullOrBlank()) return null
+
     val calendar = Calendar.getInstance()
-    if (value.isNullOrBlank()) return calendar
 
     val patterns = listOf(
         "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
@@ -441,6 +444,14 @@ private fun parseIso(value: String?): Calendar {
     }
 
     return calendar
+}
+
+private fun addDays(calendar: Calendar, days: Int): Calendar {
+    return (calendar.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, days) }
+}
+
+private fun formatFullDate(calendar: Calendar): String {
+    return SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(calendar.time)
 }
 
 private fun addMinutes(base: Calendar, minutes: Int): Calendar {

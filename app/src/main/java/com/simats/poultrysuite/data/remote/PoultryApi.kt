@@ -75,6 +75,11 @@ interface PoultryApi {
         @Body request: Map<String, String>
     ): retrofit2.Response<Unit>
 
+    @POST("farm/inventory/medicine")
+    suspend fun addMedicineStock(
+        @Body request: Map<String, String>
+    ): retrofit2.Response<Unit>
+
     @GET("farm/batch/{id}")
     suspend fun getBatchDetail(@retrofit2.http.Path("id") id: String): com.simats.poultrysuite.data.model.BatchDetail
     
